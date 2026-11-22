@@ -60,24 +60,40 @@ authentication and transport security first.
 ## Quick start (local — the real path)
 
 Run this on the machine that holds the ESP32 — the backend is USB-serial
-bound, so it must live next to the bag (see docs/deployment.md).
+bound, so it must live next to the bag. No git needed: the project is a
+downloaded folder, not a clone.
 
 ```bash
-# 1. One-time setup (Python 3.10+, no Node required)
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+# 1. Open a terminal and go into the project folder
+cd <path-to-the-downloaded-folder>
 
-# 2. Run the dashboard backend
-#    localhost-only:
-python3 dashboard/app.py
-#    LAN/VPN view (open http://<your-machine-ip>:5001 on other devices):
+# 2. Install dependencies (Python 3.10+, no Node required)
+#    Windows:       python -m pip install -r requirements.txt
+#    macOS / Linux: python3 -m pip install -r requirements.txt
+
+# 3. Run the dashboard — localhost is the simplest:
+python dashboard/app.py        # Windows, macOS, Linux
+python3 dashboard/app.py       # Linux/macOS on systems that name it python3
+```
+
+For a LAN / VPN view (open `http://<your-machine-ip>:5001` on other devices):
+
+```bash
+# Linux / macOS — bind 0.0.0.0 for the LAN, open on other devices
 STB_HOST=0.0.0.0 python3 dashboard/app.py
 
-#    If auto-detect picks the wrong USB port, force it:
-#    STB_SERIAL_PORT=/dev/ttyUSB0 python3 dashboard/app.py
+# Force a specific USB port if auto-detect picks the wrong one
+STB_SERIAL_PORT=/dev/ttyUSB0 python3 dashboard/app.py
 
-# 3. (optional) Run the AI reference service (http://127.0.0.1:3000)
-python3 ai_server/ai_server.py
+# Windows — the same idea, with COM ports
+STB_HOST=0.0.0.0 python dashboard/app.py
+STB_SERIAL_PORT=COM3 python dashboard/app.py
+```
+
+Optional — advisory AI panel (needs its own terminal):
+
+```bash
+python3 ai_server/ai_server.py     # http://127.0.0.1:3000
 ```
 
 Open **http://127.0.0.1:5001**. With no hardware attached, the dashboard
