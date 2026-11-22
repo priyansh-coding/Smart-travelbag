@@ -54,7 +54,7 @@
     <div class="side-device" id="sideDevice">
       <div class="side-device-top">
         <span class="side-device-dot" id="sideDeviceDot"></span>
-        <span class="side-device-name" id="sideDeviceName">smart-travel-bag-01</span>
+        <span class="side-device-name" id="sideDeviceName">—</span>
       </div>
       <div class="side-device-row">
         <span>Weight</span><b id="sideWeight">–– kg</b>
@@ -317,11 +317,12 @@
               <span class="card-label"><span class="swap">⇄</span> HOW THE ESP32 CONNECTS</span>
             </div>
             <p class="conn-text">The ESP32 DevKit V1 sends a JSON telemetry payload to this endpoint every 1–3 seconds. The dashboard validates it, stores it, and updates the screen — nothing else to wire.</p>
+            <p class="conn-text"><code>Copy curl example</code> builds the endpoint URL from the live configuration — it contains no sample readings. Every value in that payload is <code>null</code>/placeholder by design: the ESP32 must send real sensor readings.</p>
             <code class="conn-code" id="connEndpointUrl">POST http://&lt;host&gt;:&lt;port&gt;/api/update</code>
             <div class="conn-hint">
               <span>Expected payload (see docs/api_contract.md):</span>
               <ul class="conn-list">
-                <li><code>device_id</code> — string, e.g. <code>"smart-travel-bag-01"</code></li>
+                <li><code>device_id</code> — string, e.g. <code>"&lt;your-device-id&gt;"</code></li>
                 <li><code>timestamp</code> — ISO-8601 string</li>
                 <li><code>weight_kg</code>, <code>locked</code>, <code>bag_open</code>, <code>movement_detected</code>, <code>distance_cm</code></li>
                 <li><code>gps</code> — <code>{valid, latitude, longitude}</code> only when a valid fix exists</li>

@@ -26,34 +26,33 @@ Serve the dashboard page (HTML). No auth, local network only.
 
 Latest device state plus staleness. The browser polls this endpoint.
 
+Shape only — every value below is a placeholder or `null`, not a reading.
+Tags (`<...>`) mark where the real value comes from:
+
 ```json
 {
   "ok": true,
   "device": {
-    "device_id": "smart-travel-bag-01",
-    "source_ip": "192.168.1.42",
-    "received_at": 1795375714.29,
-    "posted_at": "2026-11-22T09:30:00+05:30",
-    "seq": 1042,
-    "age_s": 0.8,
-    "stale": false,
-    "connection": "online",
-    "weight_kg": 4.25,
-    "locked": true,
-    "bag_open": false,
-    "movement_detected": false,
-    "acceleration": { "x": 0.1, "y": 0.2, "z": 1.0, "total": 10.4 },
-    "distance_cm": 85.4,
-    "gps": { "valid": true, "latitude": 20.4625, "longitude": 85.8828, "fix_time": "2026-11-22T09:30:00+05:30" },
-    "sensors": {
-      "rfid": "online", "servo": "online", "hx711": "online",
-      "mpu6050": "online", "reed_switch": "online", "ultrasonic": "online",
-      "gps": "online", "buzzer": "online", "esp32_cam": "offline"
-    },
-    "rfid_result": "accepted",
-    "buzzer": false,
-    "events_count": 12,
-      "ai": { "classification": "SAFE", "risk": "low", "explanation": "...", "timestamp": "2026-11-22T09:30:12+00:00", "source": "ai-service" }
+    "device_id": "<from the firmware>",
+    "source_ip": "<ip of the ESP32>",
+    "received_at": <server epoch seconds>,
+    "posted_at": "<device timestamp, echoed>",
+    "seq": <sequence hint>,
+    "age_s": <seconds since last telemetry>,
+    "stale": <bool>,
+    "connection": "online | stale | offline",
+    "weight_kg": <number|null>,
+    "locked": <bool|null>,
+    "bag_open": <bool|null>,
+    "movement_detected": <bool|null>,
+    "acceleration": <{x,y,z,total}|null>,
+    "distance_cm": <number|null>,
+    "gps": { "valid": <bool>, "latitude": <number|null>, "longitude": <number|null>, "fix_time": <string|null> },
+    "sensors": { "rfid": "online|offline|not_tested|error", "servo": "...", "hx711": "...", "mpu6050": "...", "reed_switch": "...", "ultrasonic": "...", "gps": "...", "buzzer": "...", "esp32_cam": "..." },
+    "rfid_result": "accepted|rejected|unknown|null",
+    "buzzer": <bool|null>,
+    "events_count": <number>,
+    "ai": <object|null>
   },
   "config": { "cameraUrl": null, "pollIntervalMs": 2000, "staleSeconds": 10.0 }
 }
@@ -71,7 +70,7 @@ Receive ESP32 telemetry (the ingestion endpoint).
 
 | Field | Type | Required | Range / rule |
 |-------|------|----------|--------------|
-| `device_id` | string | yes (default `smart-travel-bag-01`) | any string |
+| `device_id` | string | yes (defaults to the firmware's `smart-travel-bag-01`) | any string |
 | `timestamp` | string | no | ISO-8601; echoed, not trusted |
 | `seq` | number | no | monotonic sequence hint |
 | `weight_kg` | number | no | `0..20` (bag capacity — configure) |
@@ -106,7 +105,7 @@ Newest-first, capped at `EVENTS_MAX` (100). `severity` ∈ `info/warning/critica
 
 ## GET /api/history
 
-`{"ok": true, "history": [ {"ts": <epoch>, "weight_kg": 4.25}, ... ] }`
+`{"ok": true, "history": [ {"ts": <epoch>, "weight_kg": <number>}, ... ] }`
 Last N samples (default 240), oldest first.
 
 ## GET /api/health
@@ -117,9 +116,11 @@ Last N samples (default 240), oldest first.
 
 Forwards the current snapshot to the AI service.
 
+Shape only — classification comes from the AI service, never from fixed text:
+
 ```json
 { "ok": true, "status": "ok", "error": null,
-  "result": { "classification": "SAFE", "risk": "low", "explanation": "...", "timestamp": "...", "source": "ai-service" } }
+  "result": { "classification": "<SAFE|WARNING|ALERT|UNKNOWN>", "risk": "<risk level>", "explanation": "<reason>", "timestamp": "<ISO-8601>", "source": "ai-service" } }
 ```
 
 Failure (AI service unreachable or unhelpful) → HTTP 503 with
@@ -134,22 +135,24 @@ not a theft detector.
 
 ESP32 connection details for the ESP32 view:
 
+Shape only — every value below is a placeholder or `null`, not a reading:
+
 ```json
 {
   "ok": true,
-  "connected": true,
-  "connection": "online",
-  "device_id": "smart-travel-bag-01",
-  "source_ip": "192.168.1.42",
-  "received_at": 1795375714.29,
-  "posted_at": "2026-11-22T09:30:00+05:30",
-  "age_s": 0.8,
-  "seq": 1042,
-  "stale_seconds": 10.0,
-  "modules_reported": 9,
+  "connected": <bool>,
+  "connection": "online | stale | offline",
+  "device_id": "<from the firmware|null>",
+  "source_ip": "<ip of the ESP32|null>",
+  "received_at": <server epoch seconds|null>,
+  "posted_at": "<device timestamp|null>",
+  "age_s": <number|null>,
+  "seq": <number|null>,
+  "stale_seconds": <number>,
+  "modules_reported": <number>,
   "modules_total": 9,
-  "last_event": { "id": "ev-...", "ts": "...", "type": "device_connected", "message": "...", "severity": "info", "source": "device" },
-  "endpoint": { "host": "127.0.0.1", "port": 5001, "path": "/api/update", "description": "ESP32 posts its JSON telemetry here" }
+  "last_event": <event object|null>,
+  "endpoint": { "host": "<your-LAN-IP>", "port": <port>, "path": "/api/update", "description": "ESP32 posts its JSON telemetry here" }
 }
 ```
 

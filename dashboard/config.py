@@ -24,7 +24,7 @@ class Config:
     AI_AUTO_ANALYZE_S = float(os.environ.get("STB_AI_AUTO_S", "30"))
 
     # --- Camera ------------------------------------------------------------
-    # ESP32-CAM stream endpoint (e.g. http://192.168.1.50:81/stream).
+    # ESP32-CAM stream endpoint (e.g. http://<your-esp32-cam-ip>:<port>/stream).
     CAMERA_URL = os.environ.get("STB_CAMERA_URL", "") or None
 
     # --- Frontend polling ---------------------------------------------------

@@ -77,8 +77,14 @@ Send live telemetry from the ESP32:
 ```bash
 curl -X POST http://127.0.0.1:5001/api/update \
   -H 'Content-Type: application/json' \
-  -d '{"device_id":"stb-01","weight_kg":4.25,"locked":true,"bag_open":false,"movement_detected":false,"distance_cm":85.4,"gps":{"valid":true,"latitude":20.4625,"longitude":85.8828},"sensors":{"rfid":"online","servo":"online","hx711":"online","mpu6050":"online","reed_switch":"online","ultrasonic":"online","gps":"online","buzzer":"online","esp32_cam":"offline"}}'
+  -d '{"device_id":"<your-device-id>","timestamp":"<ISO-8601-timestamp>","weight_kg":null,"locked":null,"bag_open":null,"movement_detected":null,"distance_cm":null,"gps":{"valid":false,"latitude":null,"longitude":null},"sensors":{"rfid":"offline","servo":"offline","hx711":"offline","mpu6050":"offline","reed_switch":"offline","ultrasonic":"offline","gps":"offline","buzzer":"offline","esp32_cam":"offline"},"rfid_result":null}'
 ```
+
+That payload is a **shape template** — nulls throughout by design. Replace
+`<your-device-id>` with the id from the firmware and fill in real readings
+from the bag (weight, lock, reed switch, MPU6050, ultrasonic, GPS). The
+dashboard never shows sample values, so the dashboard will stay on
+OFFLINE until telemetry with the real device_id arrives.
 
 ## Connecting the ESP32
 
@@ -95,7 +101,7 @@ shows OFFLINE / NO DATA.
    expected endpoint and a copyable curl example.
 
 For the ESP32-CAM stream, set `STB_CAMERA_URL` (e.g.
-`http://192.168.1.50:81/stream`) — the camera panel shows LIVE only when the
+`http://<your-esp32-cam-ip>:<port>/stream`) — the camera panel shows LIVE only when the
 stream actually loads, otherwise it shows its offline state.
 
 ## Configuration
@@ -107,7 +113,7 @@ All settings live in `dashboard/config.py`, with environment overrides:
 | `STB_HOST` / `STB_PORT` | `127.0.0.1` / `5001` | Dashboard bind |
 | `STB_STALE_SECONDS` | `10` | Freshness threshold |
 | `STB_POLL_MS` | `2000` | Browser poll interval |
-| `STB_CAMERA_URL` | unset | ESP32-CAM stream (e.g. `http://192.168.1.50:81/stream`) |
+| `STB_CAMERA_URL` | unset | ESP32-CAM stream (e.g. `http://<your-esp32-cam-ip>:<port>/stream`) |
 | `STB_AI_URL` | `http://127.0.0.1:3000/analyze` | AI service endpoint |
 | `STB_AI_TIMEOUT` | `5` | AI call timeout (s) |
 

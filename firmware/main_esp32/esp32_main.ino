@@ -23,7 +23,7 @@
 // credential file. Never commit Wi-Fi passwords or device credentials.
 const char* WIFI_SSID = "YOUR_SSID";
 const char* WIFI_PASSWORD = "YOUR_PASSWORD";
-const char* DASHBOARD_HOST = "192.168.1.10";   // local dashboard server
+const char* DASHBOARD_HOST = "<dashboard-host>";   // local dashboard server (replace with your machine IP)
 const int   DASHBOARD_PORT = 5001;
 const char* DASHBOARD_UPDATE_PATH = "/api/update";
 

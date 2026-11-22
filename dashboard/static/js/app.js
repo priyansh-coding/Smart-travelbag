@@ -94,7 +94,7 @@
   function renderSidebar(device) {
     const conn = device.connection || 'offline';
     $('sideDeviceDot').className = 'side-device-dot ' + (conn === 'online' ? 'live' : conn === 'stale' ? 'stale' : 'off');
-    $('sideDeviceName').textContent = device.device_id || 'smart-travel-bag-01';
+    $('sideDeviceName').textContent = device.device_id || '—';
     $('sideWeight').textContent = device.weight_kg == null ? '–– kg' : `${device.weight_kg.toFixed(2)} kg`;
     const state = $('sideState');
     state.textContent = conn.toUpperCase();
@@ -393,7 +393,7 @@
       chip.className = 'chip';
       title.textContent = 'CAMERA NOT CONFIGURED';
       sub.textContent = 'Set STB_CAMERA_URL to the ESP32-CAM stream';
-      $('cameraOffNote').textContent = 'Example: http://192.168.1.50:81/stream';
+      $('cameraOffNote').textContent = 'Example: http://<your-esp32-cam-ip>:<port>/stream';
       return;
     }
     if (!img.src || img.dataset.url !== url) {
@@ -654,7 +654,7 @@
     const port = conn && conn.endpoint ? conn.endpoint.port : 5001;
     const url = `http://${host}:${port}/api/update`;
     const text = `curl -X POST ${url} -H 'Content-Type: application/json' \
-  -d '{"device_id":"smart-travel-bag-01","weight_kg":4.25,"locked":true,"bag_open":false,"movement_detected":false,"distance_cm":85.4,"gps":{"valid":true,"latitude":20.4625,"longitude":85.8828},"sensors":{"rfid":"online","servo":"online","hx711":"online","mpu6050":"online","reed_switch":"online","ultrasonic":"online","gps":"online","buzzer":"online","esp32_cam":"online"}}'`;
+  -d '{"device_id":"<your-device-id>","timestamp":"<ISO-8601-timestamp>","weight_kg":null,"locked":null,"bag_open":null,"movement_detected":null,"distance_cm":null,"gps":{"valid":false,"latitude":null,"longitude":null},"sensors":{"rfid":"offline","servo":"offline","hx711":"offline","mpu6050":"offline","reed_switch":"offline","ultrasonic":"offline","gps":"offline","buzzer":"offline","esp32_cam":"offline"},"rfid_result":null}'`;
     try {
       await navigator.clipboard.writeText(text);
       $('connCopyBtn').textContent = 'Copied!';
