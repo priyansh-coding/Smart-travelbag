@@ -57,21 +57,65 @@ serial — the bag does not use Wi-Fi — and the dashboard is meant to be opene
 on the same machine, **not** exposed to the public internet without
 authentication and transport security first.
 
-## Quick start
+## Quick start (local — the real path)
+
+Run this on the machine that holds the ESP32 — the backend is USB-serial
+bound, so it must live next to the bag. No git needed: the project is a
+downloaded folder, not a clone.
 
 ```bash
-# 1. Install dependencies (Python 3.10+, no Node required)
-pip install -r requirements.txt
+# 1. Open a terminal and go into the project folder
+cd <path-to-the-downloaded-folder>
 
-# 2. Run the dashboard backend  (http://127.0.0.1:5001)
-python dashboard/app.py
+# 2. Install dependencies (Python 3.10+, no Node required)
+#    Windows:       python -m pip install -r requirements.txt
+#    macOS / Linux: python3 -m pip install -r requirements.txt
 
-# 3. (optional) Run the AI reference service (http://127.0.0.1:3000)
-python ai_server/ai_server.py
+# 3. Run the dashboard — localhost is the simplest:
+python dashboard/app.py        # Windows, macOS, Linux
+python3 dashboard/app.py       # Linux/macOS on systems that name it python3
+```
+
+For a LAN / VPN view (open `http://<your-machine-ip>:5001` on other devices):
+
+```bash
+# Linux / macOS — bind 0.0.0.0 for the LAN, open on other devices
+STB_HOST=0.0.0.0 python3 dashboard/app.py
+
+# Force a specific USB port if auto-detect picks the wrong one
+STB_SERIAL_PORT=/dev/ttyUSB0 python3 dashboard/app.py
+
+# Windows — the same idea, with COM ports
+STB_HOST=0.0.0.0 python dashboard/app.py
+STB_SERIAL_PORT=COM3 python dashboard/app.py
+```
+
+Optional — advisory AI panel (needs its own terminal):
+
+```bash
+python3 ai_server/ai_server.py     # http://127.0.0.1:3000
 ```
 
 Open **http://127.0.0.1:5001**. With no hardware attached, the dashboard
 honestly shows *OFFLINE / NO DATA* — plug in the ESP32 below to light it up.
+
+## Deploying to Render
+
+Render hosts the dashboard shell at a public URL — it cannot read the USB
+port (no USB hardware on cloud hosts, and USB is the ONE connection mode).
+On Render the dashboard honestly shows OFFLINE / NO DATA; the backend that
+reads the USB port must run next to the ESP32. See
+[docs/deployment.md](docs/deployment.md) for both options, the Blueprint
+(`render.yaml`), and the honest limitations.
+
+```bash
+# Local, on the machine with the ESP32 attached — the real path:
+pip install -r requirements.txt
+STB_HOST=0.0.0.0 python3 dashboard/app.py     # then LAN / VPN view
+
+# Cloud, as a shell only (Render Blueprint, auto-detected):
+#   New → Blueprint → render.yaml
+```
 
 ## Connecting the ESP32
 
@@ -83,8 +127,8 @@ One connection mode, and it is USB serial — no Wi-Fi, no HTTP.
    at 115200 baud every 1–3 seconds — see `docs/api_contract.md`.
 2. Plug the ESP32 into your machine over USB.
 3. (optional) Set `STB_SERIAL_PORT` / `STB_SERIAL_BAUD` if the auto-detect
-   picks the wrong port (e.g. `STB_SERIAL_PORT=/dev/ttyUSB0 python dashboard/app.py`).
-4. Run the backend: `python dashboard/app.py`
+   picks the wrong port (e.g. `STB_SERIAL_PORT=/dev/ttyUSB0 python3 dashboard/app.py`).
+4. Run the backend: `python3 dashboard/app.py`
 5. The **ESP32** sidebar view shows the live handshake — connection state,
    USB port, USB device name, VID/PID, device ID, last update, freshness,
    sequence number, modules reported, parse errors, last event, and a

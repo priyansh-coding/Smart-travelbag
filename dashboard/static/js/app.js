@@ -629,7 +629,10 @@
     const map = {
       online:  { text: 'CONNECTED', cls: 'ok',   sub: `ESP32 reporting over USB — last update ${fmtAge(conn.age_s)}.` },
       stale:   { text: 'STALE',     cls: 'warn', sub: `No fresh telemetry for ${fmtAge(conn.age_s)} — check the USB cable and the ESP32.` },
-      offline: { text: 'OFFLINE',   cls: '',     sub: port ? 'ESP32 seen on USB but not reporting — check the firmware loop.' : 'No USB port detected — plug in the ESP32 (or set STB_SERIAL_PORT).' },
+      offline: { text: 'OFFLINE',   cls: '',     sub: conn.hosted
+        ? 'Hosted deployment — this backend has no USB port. Run the backend on the machine with the ESP32 plugged in.'
+        : port ? 'ESP32 seen on USB but not reporting — check the firmware loop.'
+        : 'No USB port detected — plug in the ESP32 (or set STB_SERIAL_PORT).' },
     };
     const m = map[connName] || map.offline;
     big.textContent = m.text;
@@ -651,6 +654,7 @@
 
     $('connEndpointUrl').textContent = port
       ? `Serial @ ${port} · ${conn.baud || 115200} baud`
+      : conn.hosted ? 'Hosted — no USB hardware on this backend'
       : 'Serial @ <port> · — baud';
   }
   $('connRetryBtn').addEventListener('click', () => poll());
