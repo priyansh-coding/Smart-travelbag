@@ -187,7 +187,7 @@
     const chip = $('heroDeviceChip');
     const status = $('heroStatus');
     chip.textContent = 'DEVICE — ' + (device.device_id || 'unknown');
-    chip.title = 'Source: ' + (device.source_ip || 'no device connected');
+    chip.title = 'Source: ' + (device.usb_port || 'no device connected');
     status.classList.remove('live', 'stale', 'offline');
     if (device.connection === 'online') {
       status.textContent = 'LIVE';
@@ -625,10 +625,11 @@
     const chip = $('connStatusChip');
     if (!big || !conn || !$('connEndpointUrl')) return;
     const connName = conn.connection || 'offline';
+    const port = conn.usb_port;
     const map = {
-      online:  { text: 'CONNECTED', cls: 'ok',   sub: `ESP32 reporting — last update ${fmtAge(conn.age_s)}.` },
-      stale:   { text: 'STALE',     cls: 'warn', sub: `No fresh telemetry for ${fmtAge(conn.age_s)} — check the ESP32 and its Wi-Fi.` },
-      offline: { text: 'OFFLINE',   cls: '',     sub: 'No ESP32 connected yet — the dashboard lights up the moment the bag starts reporting.' },
+      online:  { text: 'CONNECTED', cls: 'ok',   sub: `ESP32 reporting over USB — last update ${fmtAge(conn.age_s)}.` },
+      stale:   { text: 'STALE',     cls: 'warn', sub: `No fresh telemetry for ${fmtAge(conn.age_s)} — check the USB cable and the ESP32.` },
+      offline: { text: 'OFFLINE',   cls: '',     sub: port ? 'ESP32 seen on USB but not reporting — check the firmware loop.' : 'No USB port detected — plug in the ESP32 (or set STB_SERIAL_PORT).' },
     };
     const m = map[connName] || map.offline;
     big.textContent = m.text;
@@ -637,28 +638,33 @@
     chip.className = 'chip ' + m.cls;
     sub.textContent = m.sub;
     $('connDeviceId').textContent = conn.device_id || '—';
-    $('connSourceIp').textContent = conn.source_ip || '—';
+    $('connUsbPort').textContent = port || '—';
+    $('connUsbName').textContent = conn.usb_device_name || '—';
+    $('connUsbVidPid').textContent = conn.usb_vid_pid || '—';
     $('connLastUpdate').textContent = conn.posted_at ? fmtTime(conn.posted_at) : '—';
     $('connAge').textContent = conn.age_s == null ? '—' : `${conn.age_s}s (threshold ${(conn.stale_seconds || 10)}s)`;
     $('connSeq').textContent = conn.seq == null ? '—' : `#${conn.seq}`;
     $('connModules').textContent = `${conn.modules_reported || 0} / ${conn.modules_total || 9}`;
+    $('connParseErrors').textContent = String(conn.parse_errors || 0);
+    const lastEv = conn.last_event;
+    $('connLastEvent').textContent = lastEv ? `${lastEv.type} — ${lastEv.message}` : '—';
 
-    const ep = conn.endpoint;
-    if (ep) {
-      $('connEndpointUrl').textContent = `POST http://${ep.host}:${ep.port}${ep.path}`;
-    }
+    $('connEndpointUrl').textContent = port
+      ? `Serial @ ${port} · ${conn.baud || 115200} baud`
+      : 'Serial @ <port> · — baud';
   }
   $('connRetryBtn').addEventListener('click', () => poll());
   $('connCopyBtn').addEventListener('click', async () => {
-    const host = conn && conn.endpoint ? conn.endpoint.host : 'YOUR_HOST';
-    const port = conn && conn.endpoint ? conn.endpoint.port : 5001;
-    const url = `http://${host}:${port}/api/update`;
-    const text = `curl -X POST ${url} -H 'Content-Type: application/json' \
-  -d '{"device_id":"<your-device-id>","timestamp":"<ISO-8601-timestamp>","weight_kg":null,"locked":null,"bag_open":null,"movement_detected":null,"distance_cm":null,"gps":{"valid":false,"latitude":null,"longitude":null},"sensors":{"rfid":"offline","servo":"offline","hx711":"offline","mpu6050":"offline","reed_switch":"offline","ultrasonic":"offline","gps":"offline","buzzer":"offline","esp32_cam":"offline"},"rfid_result":null}'`;
+    const cmd = conn && conn.endpoint ? conn.endpoint.test_command : null;
+    if (!cmd) {
+      $('connCopyBtn').textContent = 'Set the ESP32 port first';
+      setTimeout(() => { $('connCopyBtn').textContent = 'Copy read command'; }, 1600);
+      return;
+    }
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(cmd);
       $('connCopyBtn').textContent = 'Copied!';
-      setTimeout(() => { $('connCopyBtn').textContent = 'Copy curl example'; }, 1600);
+      setTimeout(() => { $('connCopyBtn').textContent = 'Copy read command'; }, 1600);
     } catch (_) {
       $('connCopyBtn').textContent = 'Copy not available';
     }

@@ -16,7 +16,7 @@ review.
 
 | Feature | PRD ref | Detail |
 |---------|---------|--------|
-| Project header & connection state | FR-01 | Project name, Wi-Fi/backend state, last-update timestamp, overall security banner |
+| Project header & connection state | FR-01 | Project name, USB/backend state, last-update timestamp, overall security banner |
 | Weight monitoring | FR-02 | Calibrated HX711 value in kg + trend chart |
 | Smart lock | FR-03 | Locked/unlocked state + RFID accept/reject result |
 | Bag opening | FR-04 | Reed-switch open/closed + event on change |
@@ -36,12 +36,13 @@ review.
 ```
  Sensors + actuators (ESP32 DevKit V1)
    RFID · HX711 · MPU6050 · reed · ultrasonic · GPS · buzzer · SG90
-                │  Wi-Fi / HTTP JSON
+                │  USB serial (ONE connection mode)
                 ▼
      Dashboard Flask backend (dashboard/app.py)      AI reference service
-     • validates & stores telemetry        POST /analyze       (ai_server/ai_server.py)
-     • generates state-change events     ◄────────►  returns SAFE/WARNING/ALERT
-     • serves the browser                             + risk + explanation
+     • reads the USB port, validates & stores        POST /analyze       (ai_server/ai_server.py)
+       one JSON object per line                    ◄────────►  returns SAFE/WARNING/ALERT
+     • generates state-change events                          + risk + explanation
+     • serves the browser
                 │
                 ▼
    Browser dashboard (static, self-contained)
@@ -51,8 +52,9 @@ review.
    ESP32-CAM ──────────┘      (separate board, separate stream)
 ```
 
-The dashboard is a local-network prototype. It is designed to be opened on
-the same Wi-Fi as the bag — **not** exposed to the public internet without
+The dashboard is a local-machine prototype. The ESP32 is connected by USB
+serial — the bag does not use Wi-Fi — and the dashboard is meant to be opened
+on the same machine, **not** exposed to the public internet without
 authentication and transport security first.
 
 ## Quick start
@@ -69,36 +71,26 @@ python ai_server/ai_server.py
 ```
 
 Open **http://127.0.0.1:5001**. With no hardware attached, the dashboard
-honestly shows *OFFLINE / NO DATA* — use the ESP32 view's copyable curl
-example (or the ESP32 firmware) to stream real telemetry from the bag.
-
-Send live telemetry from the ESP32:
-
-```bash
-curl -X POST http://127.0.0.1:5001/api/update \
-  -H 'Content-Type: application/json' \
-  -d '{"device_id":"<your-device-id>","timestamp":"<ISO-8601-timestamp>","weight_kg":null,"locked":null,"bag_open":null,"movement_detected":null,"distance_cm":null,"gps":{"valid":false,"latitude":null,"longitude":null},"sensors":{"rfid":"offline","servo":"offline","hx711":"offline","mpu6050":"offline","reed_switch":"offline","ultrasonic":"offline","gps":"offline","buzzer":"offline","esp32_cam":"offline"},"rfid_result":null}'
-```
-
-That payload is a **shape template** — nulls throughout by design. Replace
-`<your-device-id>` with the id from the firmware and fill in real readings
-from the bag (weight, lock, reed switch, MPU6050, ultrasonic, GPS). The
-dashboard never shows sample values, so the dashboard will stay on
-OFFLINE until telemetry with the real device_id arrives.
+honestly shows *OFFLINE / NO DATA* — plug in the ESP32 below to light it up.
 
 ## Connecting the ESP32
 
-No mock data is shown anywhere. The dashboard comes alive the moment the
-ESP32 DevKit V1 starts posting telemetry — until then every card honestly
-shows OFFLINE / NO DATA.
+One connection mode, and it is USB serial — no Wi-Fi, no HTTP.
 
-1. Power the bag. Keep `STB_PORT` as-is in `dashboard/config.py`.
-2. Run the backend: `python dashboard/app.py`
-3. The ESP32 firmware POSTs JSON to `POST http://<host>:5001/api/update`
-   every 1–3 seconds — see `docs/api_contract.md` for the exact payload.
-4. The **ESP32** sidebar view shows the live handshake: connection state,
-   device ID, source IP, last update, freshness, sequence number, the
-   expected endpoint and a copyable curl example.
+1. Flash the firmware in `firmware/main_esp32/esp32_main.ino` onto the ESP32
+   DevKit V1 (UNVERIFIED skeleton — confirm pin map on the physical bag).
+   The firmware prints one JSON telemetry object per line over USB serial
+   at 115200 baud every 1–3 seconds — see `docs/api_contract.md`.
+2. Plug the ESP32 into your machine over USB.
+3. (optional) Set `STB_SERIAL_PORT` / `STB_SERIAL_BAUD` if the auto-detect
+   picks the wrong port (e.g. `STB_SERIAL_PORT=/dev/ttyUSB0 python dashboard/app.py`).
+4. Run the backend: `python dashboard/app.py`
+5. The **ESP32** sidebar view shows the live handshake — connection state,
+   USB port, USB device name, VID/PID, device ID, last update, freshness,
+   sequence number, modules reported, parse errors, last event, and a
+   copyable read command for the serial port.
+
+No Wi-Fi is needed — the HTTP endpoint and curl flow are gone by design.
 
 For the ESP32-CAM stream, set `STB_CAMERA_URL` (e.g.
 `http://<your-esp32-cam-ip>:<port>/stream`) — the camera panel shows LIVE only when the
@@ -111,6 +103,8 @@ All settings live in `dashboard/config.py`, with environment overrides:
 | Environment variable | Default | Meaning |
 |----------------------|---------|---------|
 | `STB_HOST` / `STB_PORT` | `127.0.0.1` / `5001` | Dashboard bind |
+| `STB_SERIAL_PORT` | auto-detect | USB serial port to read (e.g. `/dev/ttyUSB0`, `COM3`) |
+| `STB_SERIAL_BAUD` | `115200` | Firmware baud rate |
 | `STB_STALE_SECONDS` | `10` | Freshness threshold |
 | `STB_POLL_MS` | `2000` | Browser poll interval |
 | `STB_CAMERA_URL` | unset | ESP32-CAM stream (e.g. `http://<your-esp32-cam-ip>:<port>/stream`) |
@@ -129,16 +123,16 @@ last-update chip, refresh) and the security banner.
   dotted world map with GPS pin + arc, ESP32-CAM, AI panel, recent events.
 - **Sensors** — weight trend chart + per-module detail table.
 - **Events** — full event history with severity/security filters.
-- **ESP32** — live connection state, handshake details, the exact POST
-  endpoint, the expected payload and a copyable curl example.
+- **ESP32** — live connection state, USB port + device name + VID/PID,
+  device ID, freshness, sequence, modules, parse errors, last event,
+  and a copyable read command for the serial port.
 
 ## API
 
 See [docs/api_contract.md](docs/api_contract.md). Highlights:
 
-- `POST /api/update` — receive ESP32 telemetry (validated, PRD §6.2)
 - `GET /api/status` — latest state + freshness (browser poll)
-- `GET /api/connection` — ESP32 connection details (handshake, source, freshness, endpoint)
+- `GET /api/connection` — ESP32 USB connection details (port, device name, VID/PID, freshness, endpoint-as-text)
 - `GET /api/events` / `GET /api/history` / `GET /api/health`
 - `POST /api/analyze` — forward snapshot to the AI service
 - `GET /api/config` — public configuration (never secrets)
@@ -189,7 +183,7 @@ intended users on the trusted network.
 
 This repository is a working prototype. Highlighted, honest status:
 
-- ✅ Dashboard backend, validation, events, ESP32 connection view — built & tested
+- ✅ Dashboard backend, USB serial validation, events, ESP32 connection view — built & tested
 - ✅ UI (Dashboard / Sensors / ESP32 / Events), dotted world map, weight trend — built
 - ⏳ ESP32 firmware — skeleton, **unverified**
 - ⏳ Acceptance tests AT-01…AT-11 — not yet run against hardware (PRD §10)

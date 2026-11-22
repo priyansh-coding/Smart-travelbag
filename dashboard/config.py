@@ -31,6 +31,12 @@ class Config:
     POLL_INTERVAL_MS = int(os.environ.get("STB_POLL_MS", "2000"))
     HEALTH_POLL_MS = int(os.environ.get("STB_HEALTH_POLL_MS", "5000"))
 
+    # --- USB serial (the ONE connection mode) ------------------------------
+    # Port to read (e.g. /dev/ttyUSB0, COM3). Empty = auto-detect.
+    SERIAL_PORT = os.environ.get("STB_SERIAL_PORT", "") or None
+    # Baud rate the firmware prints at.
+    SERIAL_BAUD = int(os.environ.get("STB_SERIAL_BAUD", "115200"))
+
     # --- Storage limits -----------------------------------------------------
     EVENTS_MAX = 100
     HISTORY_MAX = 240  # weight samples kept for the trend chart

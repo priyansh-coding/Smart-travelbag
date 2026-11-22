@@ -1,35 +1,46 @@
 """Smart Travel Bag — dashboard backend.
 
-Receives ESP32 telemetry, validates it, records state-change events, and
-serves the dashboard plus a JSON API to the browser.
+ONE connection mode: USB serial. The ESP32 (DevKit V1, UNVERIFIED skeleton)
+prints one JSON telemetry object per line over USB serial at 115200 baud.
+This backend reads the serial port on behalf of the dashboard, validates the
+payload, records state-change events, and serves the UI + JSON API.
 
-No sample data is ever presented as live: every value shown comes from
-POST /api/update. With no device connected, the dashboard shows OFFLINE.
+No sample data is ever presented as live: every value shown comes from the
+USB serial stream. With no device connected, the dashboard shows OFFLINE.
 """
+import json
 import logging
 import math
 import random
+import sys
 import threading
 import time
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 import requests
+import serial
+import serial.tools.list_ports
 from flask import Flask, jsonify, render_template, request
-from werkzeug.exceptions import RequestEntityTooLarge
 
 from config import Config, public_config
 
 log = logging.getLogger("stb")
 
+# Configure logging on import so the worker thread can log even when this
+# module is imported by another host. basicConfig is a no-op if a host
+# (gunicorn, etc.) already configured handlers.
+if not logging.getLogger().handlers:
+    logging.basicConfig(level=logging.INFO,
+                        format="[%(asctime)s] %(name)s: %(message)s")
+
 # ---------------------------------------------------------------------------
-# In-memory device state (prototype scope: local prototype, not cloud storage)
+# In-memory device state (local prototype — not cloud storage)
 # ---------------------------------------------------------------------------
 class DeviceState:
     def __init__(self):
         self.lock = threading.Lock()
         self.device_id: Optional[str] = None
-        self.source_ip: Optional[str] = None
         self.received_at: Optional[float] = None      # server epoch seconds
         self.posted_at: Optional[str] = None          # device timestamp (echoed)
         self.seq: Optional[int] = None
@@ -47,6 +58,8 @@ class DeviceState:
         self.events: list[dict] = []
         self.history: list[dict] = []                 # {ts, weight_kg}
         self.ai_result: Optional[dict] = None
+        self.usb_port: Optional[str] = None           # port the worker is reading
+        self.usb_parse_errors: int = 0                # malformed lines seen
 
     def snapshot(self) -> dict:
         now = time.time()
@@ -54,7 +67,7 @@ class DeviceState:
         stale = age is None or age > Config.STALE_SECONDS
         return {
             "device_id": self.device_id,
-            "source_ip": self.source_ip,
+            "usb_port": self.usb_port,
             "received_at": self.received_at,
             "posted_at": self.posted_at,
             "seq": self.seq,
@@ -80,7 +93,7 @@ class DeviceState:
 state = DeviceState()
 
 # ---------------------------------------------------------------------------
-# Validation (PRD §6.2)
+# Validation (PRD §6.2, adapted for the serial stream)
 # ---------------------------------------------------------------------------
 def validate_payload(payload: Any) -> tuple[Optional[dict], Optional[str]]:
     """Return (sanitized_payload, error_message). Missing values stay null."""
@@ -215,7 +228,7 @@ def _diff_and_record(prev: dict, new: dict):
 
     # First-ever telemetry: record a connection event, not fake "changes".
     if prev.get("received_at") is None:
-        _add_event("device_connected", "Device telemetry started — connection established", "info")
+        _add_event("device_connected", "Device telemetry started — USB connection established", "info")
         return
 
     if changed("bag_open"):
@@ -266,6 +279,120 @@ def _apply_telemetry(clean: dict):
         if "buzzer" in clean: state.buzzer = clean["buzzer"]
 
     _diff_and_record(prev, state.snapshot())
+
+
+# ---------------------------------------------------------------------------
+# USB serial ingestion — ONE connection mode
+# ---------------------------------------------------------------------------
+def _detect_serial_port() -> Optional[str]:
+    """The serial port to read. STB_SERIAL_PORT wins; otherwise, auto-detect.
+
+    Returns None when nothing looks like a serial adapter. Honest by design:
+    no guesses, no HTTP, no Wi-Fi.
+    """
+    if Config.SERIAL_PORT:
+        return Config.SERIAL_PORT
+    try:
+        ports = list(serial.tools.list_ports.comports())
+    except Exception:
+        return None
+    if sys.platform.startswith("win"):
+        candidates = [p.device for p in ports if p.device.upper().startswith("COM")]
+    elif sys.platform == "darwin":
+        candidates = [p.device for p in ports if "usbmodem" in p.device or "usbserial" in p.device.lower()]
+    else:
+        candidates = [p.device for p in ports
+                      if any(t in p.device for t in ("ttyUSB", "ttyACM"))]
+    return candidates[0] if candidates else None
+
+
+def _usb_port_details(port: Optional[str]) -> dict:
+    """USB device identity for a serial port (best effort, honest)."""
+    if not port:
+        return {"device_name": None, "vid_pid": None, "manufacturer": None,
+                "serial_number": None}
+    try:
+        for p in serial.tools.list_ports.comports():
+            if p.device == port:
+                return {
+                    "device_name": (p.description or p.manufacturer or None),
+                    "vid_pid": (f"0x{p.vid:04X}:0x{p.pid:04X}"
+                                if p.vid is not None and p.pid is not None else None),
+                    "manufacturer": (p.manufacturer or None),
+                    "serial_number": (p.serial_number or None),
+                }
+    except Exception as e:
+        log.debug("USB port lookup failed for %s: %s", port, e)
+    return {"device_name": None, "vid_pid": None, "manufacturer": None,
+            "serial_number": None}
+
+
+def _usb_test_command(port: Optional[str]) -> Optional[str]:
+    """A copy-pasteable read of the live serial stream (as honest as it gets)."""
+    if not port:
+        return None
+    if sys.platform.startswith("win"):
+        return f"type {port}"
+    return f"cat {port}"
+
+
+_worker_started = False
+
+
+def _start_usb_worker():
+    """Start the background serial reader (once, regardless of import path)."""
+    global _worker_started
+    if _worker_started:
+        return
+    _worker_started = True
+    t = threading.Thread(target=_usb_worker_loop, name="stb-usb-worker", daemon=True)
+    t.start()
+
+
+def _usb_worker_loop():
+    log.info("USB serial worker started (auto-detect: STB_SERIAL_PORT unset or configured)")
+    while True:
+        port = _detect_serial_port()
+        if not port:
+            state.usb_port = None
+            time.sleep(2)
+            continue
+        try:
+            with serial.Serial(port, Config.SERIAL_BAUD, timeout=1) as ser:
+                state.usb_port = port
+                log.info("USB serial reading from %s @ %d baud", port, Config.SERIAL_BAUD)
+                while True:
+                    try:
+                        raw = ser.readline()
+                    except Exception as e:
+                        log.warning("serial read failed on %s: %s", port, e)
+                        break
+                    if not raw:
+                        continue  # 1 s timeout, port still open
+                    line = raw.decode("utf-8", errors="replace").strip()
+                    if not line:
+                        continue
+                    try:
+                        payload = json.loads(line)
+                    except Exception:
+                        with state.lock:
+                            state.usb_parse_errors += 1
+                        continue
+                    clean, err = validate_payload(payload)
+                    if err:
+                        with state.lock:
+                            state.usb_parse_errors += 1
+                        log.debug("rejected payload: %s", err)
+                        continue
+                    _apply_telemetry(clean)
+        except serial.SerialException as e:
+            state.usb_port = None
+            log.warning("serial port %s unavailable: %s — retrying", port, e)
+            time.sleep(2)
+        except Exception as e:  # port vanished / driver error — keep trying
+            state.usb_port = None
+            log.warning("USB worker error: %s — retrying", e)
+            time.sleep(2)
 
 
 # ---------------------------------------------------------------------------
@@ -340,21 +467,6 @@ def _asset_version():
     return h.hexdigest()[:10]
 
 
-def _lan_host() -> str:
-    """Best-effort LAN address of this machine (what the ESP32 should POST to)."""
-    try:
-        import socket
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.connect(("8.8.8.8", 80))  # no traffic is sent; route is only probed
-            lan = s.getsockname()[0]
-            if lan and lan not in ("127.0.0.1", "0.0.0.0", "::1"):
-                return lan
-    except Exception:
-        pass
-    # Detection failed (e.g. fully offline sandbox): show an honest placeholder.
-    return "<your-LAN-IP>" 
-
-
 def create_app():
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = Config.MAX_PAYLOAD_BYTES
@@ -367,14 +479,6 @@ def create_app():
         resp.headers["Pragma"] = "no-cache"
         resp.headers["Expires"] = "0"
         return resp
-
-    @app.errorhandler(RequestEntityTooLarge)
-    def too_large(_e):
-        return jsonify({"ok": False, "error": "Payload too large"}), 413
-
-    @app.errorhandler(400)
-    def bad_request(_e):
-        return jsonify({"ok": False, "error": "Bad request"}), 400
 
     @app.errorhandler(404)
     def not_found(_e):
@@ -400,15 +504,25 @@ def create_app():
 
     @app.route("/api/connection")
     def api_connection():
-        """ESP32 connection view: handshake state, source, freshness, endpoint."""
+        """USB connection details for the ESP32 view."""
         snap = state.snapshot()
-        last_event = state.events[0] if state.events else None
+        with state.lock:
+            port = state.usb_port
+            parse_errors = state.usb_parse_errors
+            last_event = state.events[0] if state.events else None
+        usb = _usb_port_details(port)
         return jsonify({
             "ok": True,
+            "mode": "usb-serial",
             "connected": snap["connection"] == "online",
             "connection": snap["connection"],
             "device_id": snap["device_id"],
-            "source_ip": snap["source_ip"],
+            "usb_port": port,
+            "usb_device_name": usb["device_name"],
+            "usb_vid_pid": usb["vid_pid"],
+            "usb_manufacturer": usb["manufacturer"],
+            "usb_serial_number": usb["serial_number"],
+            "baud": Config.SERIAL_BAUD,
             "received_at": snap["received_at"],
             "posted_at": snap["posted_at"],
             "age_s": snap["age_s"],
@@ -416,33 +530,13 @@ def create_app():
             "stale_seconds": Config.STALE_SECONDS,
             "modules_reported": len(snap["sensors"]),
             "modules_total": len(Config.SENSOR_MODULES),
+            "parse_errors": parse_errors,
             "last_event": last_event,
             "endpoint": {
-                "host": _lan_host(),
-                "port": Config.PORT,
-                "path": "/api/update",
-                "description": "ESP32 posts its JSON telemetry here",
+                "description": "ESP32 prints one JSON telemetry object per line here",
+                "test_command": _usb_test_command(port),
             },
         })
-
-    @app.route("/api/update", methods=["POST"])
-    def api_update():
-        if not request.is_json:
-            return jsonify({"ok": False, "error": "Expected JSON body"}), 400
-        try:
-            payload = request.get_json(silent=True)
-        except Exception:
-            payload = None
-        if payload is None:
-            return jsonify({"ok": False, "error": "Malformed JSON"}), 400
-        clean, err = validate_payload(payload)
-        if err:
-            return jsonify({"ok": False, "error": err}), 400
-        state.source_ip = request.remote_addr
-        _apply_telemetry(clean)
-        return jsonify({"ok": True,
-                        "device_id": clean.get("device_id"),
-                        "received_at": state.received_at})
 
     @app.route("/api/events")
     def api_events():
@@ -485,12 +579,11 @@ def create_app():
     def api_config():
         return jsonify({"ok": True, "config": public_config()})
 
+    _start_usb_worker()
     return app
 
 
 app = create_app()
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO,
-                        format="[%(asctime)s] %(name)s: %(message)s")
     app.run(host=Config.HOST, port=Config.PORT, debug=Config.DEBUG)

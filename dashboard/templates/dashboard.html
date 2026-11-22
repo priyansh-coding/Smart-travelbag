@@ -303,11 +303,15 @@
             <div class="conn-sub" id="connSub">No ESP32 connected yet — the dashboard will light up the moment the bag starts reporting.</div>
             <div class="conn-meta-grid">
               <div class="conn-meta-row"><span>Device ID</span><b id="connDeviceId">—</b></div>
-              <div class="conn-meta-row"><span>Source IP</span><b id="connSourceIp">—</b></div>
+              <div class="conn-meta-row"><span>USB port</span><b id="connUsbPort">—</b></div>
+              <div class="conn-meta-row"><span>USB device</span><b id="connUsbName">—</b></div>
+              <div class="conn-meta-row"><span>VID / PID</span><b id="connUsbVidPid">—</b></div>
               <div class="conn-meta-row"><span>Last update</span><b id="connLastUpdate">—</b></div>
               <div class="conn-meta-row"><span>Freshness</span><b id="connAge">—</b></div>
               <div class="conn-meta-row"><span>Sequence</span><b id="connSeq">—</b></div>
               <div class="conn-meta-row"><span>Modules reported</span><b id="connModules">0 / 9</b></div>
+              <div class="conn-meta-row"><span>Parse errors</span><b id="connParseErrors">0</b></div>
+              <div class="conn-meta-row"><span>Last event</span><b id="connLastEvent">—</b></div>
             </div>
             <button class="small-btn accent" id="connRetryBtn">Check now</button>
           </article>
@@ -316,21 +320,21 @@
             <div class="card-head">
               <span class="card-label"><span class="swap">⇄</span> HOW THE ESP32 CONNECTS</span>
             </div>
-            <p class="conn-text">The ESP32 DevKit V1 sends a JSON telemetry payload to this endpoint every 1–3 seconds. The dashboard validates it, stores it, and updates the screen — nothing else to wire.</p>
-            <p class="conn-text"><code>Copy curl example</code> builds the endpoint URL from the live configuration — it contains no sample readings. Every value in that payload is <code>null</code>/placeholder by design: the ESP32 must send real sensor readings.</p>
-            <code class="conn-code" id="connEndpointUrl">POST http://&lt;host&gt;:&lt;port&gt;/api/update</code>
+            <p class="conn-text">ONE connection mode: the ESP32 DevKit V1 prints <b>one JSON telemetry object per line over USB serial</b> at 115200 baud. The dashboard reads the port, validates the line, and updates the screen — no Wi-Fi, no HTTP, no mock data.</p>
+            <p class="conn-text">The read command copies from the live configuration — it contains no sample readings. Every value in that payload is <code>null</code>/placeholder by design: the ESP32 must send real sensor readings.</p>
+            <code class="conn-code" id="connEndpointUrl">Serial @ &lt;port&gt; · 115200 baud</code>
             <div class="conn-hint">
-              <span>Expected payload (see docs/api_contract.md):</span>
+              <span>Expected format (see docs/api_contract.md):</span>
               <ul class="conn-list">
                 <li><code>device_id</code> — string, e.g. <code>"&lt;your-device-id&gt;"</code></li>
-                <li><code>timestamp</code> — ISO-8601 string</li>
+                <li><code>timestamp</code>, <code>seq</code></li>
                 <li><code>weight_kg</code>, <code>locked</code>, <code>bag_open</code>, <code>movement_detected</code>, <code>distance_cm</code></li>
                 <li><code>gps</code> — <code>{valid, latitude, longitude}</code> only when a valid fix exists</li>
                 <li><code>sensors</code> — <code>{rfid, servo, hx711, mpu6050, reed_switch, ultrasonic, gps, buzzer, esp32_cam}</code></li>
-                <li><code>rfid_result</code> — <code>"accepted"</code> / <code>"rejected"</code></li>
+                <li><code>rfid_result</code> — <code>"accepted"</code> / <code>"rejected"</code> / <code>"unknown"</code></li>
               </ul>
             </div>
-            <button class="small-btn" id="connCopyBtn">Copy curl example</button>
+            <button class="small-btn" id="connCopyBtn">Copy read command</button>
           </article>
         </div>
       </section>

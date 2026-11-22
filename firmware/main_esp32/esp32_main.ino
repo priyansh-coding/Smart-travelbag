@@ -2,31 +2,25 @@
 // Smart Travel Bag — ESP32 DevKit V1 firmware (SKELETON)
 // =====================================================================
 // Status: UNVERIFIED — placeholder skeleton.
-// Every sensor/actuator path must be tested on the physical prototype
-// before this sketch is trusted or marked operational. No values here
-// should be assumed to be live.
+// One connection mode: USB serial. The firmware prints ONE JSON telemetry
+// object per line over USB serial (Serial.println) at 115200 baud.
+// The dashboard reads the port, validates the payload, and updates the screen.
+// Nothing here is trusted until tested on the physical prototype.
 // ---------------------------------------------------------------------
 // Required libraries (Arduino IDE):
-//   - Wire, SPI, WiFi, HTTPClient (built-in)
-//   - HX711, MPU6050, RF522 (RC522), GPS via TinyGPS++ (Arduino)
+//   - Serial + Wire (built-in)
+//   - HX711, MPU6050, RF522 (RC522), GPS via TinyGPS++
 // ---------------------------------------------------------------------
-// Payload contract: see docs/api_contract.md (POST /api/update).
+// Payload contract: docs/api_contract.md (one JSON object per line).
 // Keep the JSON builder in ONE function so field names never drift.
 // =====================================================================
 
-#include <WiFi.h>
-#include <HTTPClient.h>
-#include <time.h>
-
 // ---- Configuration (DO NOT COMMIT REAL SECRETS) ---------------------
-// Replace with your own values locally; keep these in a git-ignored
-// credential file. Never commit Wi-Fi passwords or device credentials.
-const char* WIFI_SSID = "YOUR_SSID";
-const char* WIFI_PASSWORD = "YOUR_PASSWORD";
-const char* DASHBOARD_HOST = "<dashboard-host>";   // local dashboard server (replace with your machine IP)
-const int   DASHBOARD_PORT = 5001;
-const char* DASHBOARD_UPDATE_PATH = "/api/update";
+// DEVICE_ID is safe to commit. Never commit Wi-Fi credentials, tokens
+// or other secrets here — .env / *.credentials / *.secrets are git-ignored.
+const char* DEVICE_ID = "smart-travel-bag-01";
 
+#define SERIAL_BAUD 115200
 const unsigned long TELEMETRY_INTERVAL_MS = 2000;   // 1–3 s target
 
 // ---- Globals ---------------------------------------------------------
@@ -37,42 +31,35 @@ long sequence = 0;
 // TODO: define GPIO pins per the confirmed pin map (see docs/hardware_checklist.md)
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(SERIAL_BAUD);
   // TODO: init I2C / SPI sensors
   // TODO: init buzzer, relay/servo driver (external regulated 5 V!)
-  // TODO: init WiFi
 }
 
 void loop() {
-  // TODO: WiFi connection + watchdog
-  // TODO: read sensors (weight, lock, bag_open, movement, distance, GPS)
-  // TODO: POST telemetry every TELEMETRY_INTERVAL_MS
-  //
-  // The JSON must contain the fields from docs/api_contract.md. Missing
-  // readings are reported as null, never as zeros:
-  //   { "device_id": "smart-travel-bag-01", "timestamp": "...",
-  //     "weight_kg": <float|null>, "locked": <bool|null>, ... }
+  // TODO: read sensors (weight, lock, bag_open, movement, distance, GPS, RFID)
+  unsigned long now = millis();
+  if (now - lastTelemetryMs >= TELEMETRY_INTERVAL_MS) {
+    lastTelemetryMs = now;
+    String json = buildTelemetryJson();
+    if (json.length() > 0) {
+      Serial.println(json);   // ONE JSON object per line — the dashboard's USB link
+    }
+  }
 }
 
 // ---- Helpers ---------------------------------------------------------
 String buildTelemetryJson() {
   // TODO: build the JSON from real sensor readings only.
-  // Return "" if no valid readings are available.
-  return "";
-}
-
-void sendTelemetry(const String& json) {
-  if (json.length() == 0) return;
-  HTTPClient http;
-  String url = "http://" + String(DASHBOARD_HOST) + ":" + String(DASHBOARD_PORT)
-               + DASHBOARD_UPDATE_PATH;
-  http.begin(url);
-  http.addHeader("Content-Type", "application/json");
-  int code = http.POST(json);
-  if (code > 0) {
-    Serial.printf("Telemetry sent (HTTP %d)\n", code);
-  } else {
-    Serial.printf("Telemetry failed (%s)\n", http.errorToString(code).c_str());
-  }
-  http.end();
+  // Missing readings are reported as null, never as zeros.
+  // The payload must match docs/api_contract.md:
+  //   { "device_id": "<DEVICE_ID>", "timestamp": "<ISO-8601|null>", "seq": <int>,
+  //     "weight_kg": <float|null>, "locked": <bool|null>, "bag_open": <bool|null>,
+  //     "movement_detected": <bool|null>, "distance_cm": <float|null>,
+  //     "gps": { "valid": <bool>, "latitude": <float|null>,
+  //              "longitude": <float|null>, "fix_time": <string|null> },
+  //     "sensors": { "rfid": "online", ... },
+  //     "rfid_result": "accepted" | "rejected" | "unknown" | null,
+  //     "buzzer": <bool|null> }
+  return "";   // nothing sent until the real loop is implemented
 }

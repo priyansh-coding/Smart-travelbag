@@ -6,7 +6,7 @@
 
 | Test ID | Test | Pass condition | Result |
 |---------|------|----------------|--------|
-| AT-01 | ESP32 connection | Dashboard shows controller online only after valid telemetry; offline after timeout | ⏳ Pending hardware |
+| AT-01 | ESP32 connection | Dashboard shows controller online only after valid telemetry over USB; offline after timeout | ⏳ Pending hardware |
 | AT-02 | Weight reading | Physical load change changes displayed calibrated weight; units + timestamp correct | ⏳ Pending hardware |
 | AT-03 | RFID and lock | Authorized/unauthorized RFID results and lock state match controller | ⏳ Pending hardware |
 | AT-04 | Bag-open detection | Opening/closing changes reed-switch status and creates the expected event | ⏳ Pending hardware |

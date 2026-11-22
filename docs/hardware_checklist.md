@@ -27,7 +27,7 @@
 
 ## Firmware / integration
 
-- [ ] Telemetry JSON payload built once and sent over HTTP every 1–3 s
+- [ ] Telemetry JSON payload built once and printed over USB serial every 1–3 s
 - [ ] Payload field names match docs/api_contract.md exactly
 - [ ] GPS only reported valid with coordinates
 - [ ] Weight calibration recorded (reference weight + expected kg)
@@ -37,7 +37,7 @@
 
 ## Dashboard integration
 
-- [ ] POST /api/update accepts the ESP32 payload
+- [ ] USB serial reader accepts the ESP32 payload (auto-detect or STB_SERIAL_PORT)
 - [ ] GET /api/status feeds the dashboard (browser poll)
 - [ ] /api/analyze forwards the snapshot to the AI service
 - [ ] Dashboard shows OFFLINE/STALE, never fake values, when telemetry stops
