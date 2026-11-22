@@ -1,0 +1,3 @@
+# Smart Travel Bag — dashboard backend
+flask>=3.0
+requests>=2.31
