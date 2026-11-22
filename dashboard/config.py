@@ -8,9 +8,17 @@ import os
 
 class Config:
     # --- Server ---------------------------------------------------------
-    HOST = os.environ.get("STB_HOST", "127.0.0.1")
-    PORT = int(os.environ.get("STB_PORT", "5001"))
+    # On Render (and most hosts) the host injects the PORT env var. When
+    # $PORT is present (e.g. on Render) read it directly and bind 0.0.0.0;
+    # otherwise keep the local default (127.0.0.1, 5001).
+    HOST = os.environ.get("STB_HOST", "0.0.0.0" if os.environ.get("PORT") else "127.0.0.1")
+    PORT = int(os.environ.get("STB_PORT", os.environ.get("PORT", "5001")))
     DEBUG = os.environ.get("STB_DEBUG", "0") == "1"
+
+    # True on a hosted environment (Render, etc.) — the USB worker is the
+    # ONE connection mode and cannot work there; the UI must show honest
+    # OFFLINE/NO DATA rather than imply a live link.
+    IS_HOSTED = os.environ.get("PORT") is not None
 
     # --- Freshness / staleness -----------------------------------------
     # Telemetry older than this is reported as stale/offline.

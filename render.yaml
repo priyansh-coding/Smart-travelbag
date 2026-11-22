@@ -1,0 +1,22 @@
+# Render Blueprint — Smart Travel Bag dashboard
+# One service: the dashboard backend. See docs/deployment.md for the FULL
+# story, including what the ESP32 CANNOT reach from a hosted render host.
+services:
+  - type: web
+    name: smart-travelbag-dashboard
+    runtime: python
+    region: oregon          # change if you want a different region
+    plan: free              # free tier sleeps after 15 min idle; paid for always-on
+    buildCommand: pip install -r requirements.txt
+    startCommand: cd dashboard && gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 60
+    healthCheckPath: /api/health
+    # The dashboard shows its OFFLINE state honestly while no USB device is
+    # attached (Render has no USB hardware). That is the expected behavior,
+    # not a bug: the backend that reads the USB port must run where the
+    # ESP32 is — see docs/deployment.md.
+    autoDeploy: true
+    envVars:
+      - key: STB_SERIAL_PORT
+        sync: false        # do NOT set on Render — no USB hardware exists there
+      - key: STB_CAMERA_URL
+        sync: false        # optional: ESP32-CAM stream URL (separate device)

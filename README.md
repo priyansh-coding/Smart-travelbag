@@ -73,6 +73,24 @@ python ai_server/ai_server.py
 Open **http://127.0.0.1:5001**. With no hardware attached, the dashboard
 honestly shows *OFFLINE / NO DATA* — plug in the ESP32 below to light it up.
 
+## Deploying to Render
+
+Render hosts the dashboard shell at a public URL — it cannot read the USB
+port (no USB hardware on cloud hosts, and USB is the ONE connection mode).
+On Render the dashboard honestly shows OFFLINE / NO DATA; the backend that
+reads the USB port must run next to the ESP32. See
+[docs/deployment.md](docs/deployment.md) for both options, the Blueprint
+(`render.yaml`), and the honest limitations.
+
+```bash
+# Local, on the machine with the ESP32 attached — the real path:
+pip install -r requirements.txt
+STB_HOST=0.0.0.0 python dashboard/app.py      # then LAN / VPN view
+
+# Cloud, as a shell only (Render Blueprint, auto-detected):
+#   New → Blueprint → render.yaml
+```
+
 ## Connecting the ESP32
 
 One connection mode, and it is USB serial — no Wi-Fi, no HTTP.

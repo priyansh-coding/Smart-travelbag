@@ -288,8 +288,11 @@ def _detect_serial_port() -> Optional[str]:
     """The serial port to read. STB_SERIAL_PORT wins; otherwise, auto-detect.
 
     Returns None when nothing looks like a serial adapter. Honest by design:
-    no guesses, no HTTP, no Wi-Fi.
+    no guesses, no HTTP, no Wi-Fi. On hosted backends (Render, etc.) there is
+    no USB hardware — always None, and the UI must show OFFLINE honestly.
     """
+    if Config.IS_HOSTED:
+        return None
     if Config.SERIAL_PORT:
         return Config.SERIAL_PORT
     try:
@@ -340,11 +343,18 @@ _worker_started = False
 
 
 def _start_usb_worker():
-    """Start the background serial reader (once, regardless of import path)."""
+    """Start the background serial reader (once, regardless of import path).
+
+    On hosted backends (Render, etc.) there is no USB hardware — skip the
+    worker entirely and let the UI report OFFLINE honestly.
+    """
     global _worker_started
     if _worker_started:
         return
     _worker_started = True
+    if Config.IS_HOSTED:
+        log.info("Hosted deployment — USB worker disabled (no USB hardware on this host)")
+        return
     t = threading.Thread(target=_usb_worker_loop, name="stb-usb-worker", daemon=True)
     t.start()
 
@@ -514,6 +524,7 @@ def create_app():
         return jsonify({
             "ok": True,
             "mode": "usb-serial",
+            "hosted": Config.IS_HOSTED,
             "connected": snap["connection"] == "online",
             "connection": snap["connection"],
             "device_id": snap["device_id"],
