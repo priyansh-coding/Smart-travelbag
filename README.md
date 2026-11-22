@@ -57,17 +57,27 @@ serial — the bag does not use Wi-Fi — and the dashboard is meant to be opene
 on the same machine, **not** exposed to the public internet without
 authentication and transport security first.
 
-## Quick start
+## Quick start (local — the real path)
+
+Run this on the machine that holds the ESP32 — the backend is USB-serial
+bound, so it must live next to the bag (see docs/deployment.md).
 
 ```bash
-# 1. Install dependencies (Python 3.10+, no Node required)
+# 1. One-time setup (Python 3.10+, no Node required)
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# 2. Run the dashboard backend  (http://127.0.0.1:5001)
-python dashboard/app.py
+# 2. Run the dashboard backend
+#    localhost-only:
+python3 dashboard/app.py
+#    LAN/VPN view (open http://<your-machine-ip>:5001 on other devices):
+STB_HOST=0.0.0.0 python3 dashboard/app.py
+
+#    If auto-detect picks the wrong USB port, force it:
+#    STB_SERIAL_PORT=/dev/ttyUSB0 python3 dashboard/app.py
 
 # 3. (optional) Run the AI reference service (http://127.0.0.1:3000)
-python ai_server/ai_server.py
+python3 ai_server/ai_server.py
 ```
 
 Open **http://127.0.0.1:5001**. With no hardware attached, the dashboard
@@ -85,7 +95,7 @@ reads the USB port must run next to the ESP32. See
 ```bash
 # Local, on the machine with the ESP32 attached — the real path:
 pip install -r requirements.txt
-STB_HOST=0.0.0.0 python dashboard/app.py      # then LAN / VPN view
+STB_HOST=0.0.0.0 python3 dashboard/app.py     # then LAN / VPN view
 
 # Cloud, as a shell only (Render Blueprint, auto-detected):
 #   New → Blueprint → render.yaml
@@ -101,8 +111,8 @@ One connection mode, and it is USB serial — no Wi-Fi, no HTTP.
    at 115200 baud every 1–3 seconds — see `docs/api_contract.md`.
 2. Plug the ESP32 into your machine over USB.
 3. (optional) Set `STB_SERIAL_PORT` / `STB_SERIAL_BAUD` if the auto-detect
-   picks the wrong port (e.g. `STB_SERIAL_PORT=/dev/ttyUSB0 python dashboard/app.py`).
-4. Run the backend: `python dashboard/app.py`
+   picks the wrong port (e.g. `STB_SERIAL_PORT=/dev/ttyUSB0 python3 dashboard/app.py`).
+4. Run the backend: `python3 dashboard/app.py`
 5. The **ESP32** sidebar view shows the live handshake — connection state,
    USB port, USB device name, VID/PID, device ID, last update, freshness,
    sequence number, modules reported, parse errors, last event, and a

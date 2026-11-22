@@ -28,7 +28,7 @@ way to see the bag live — Render contributes nothing here.
 ```bash
 # on the machine with the ESP32 attached (Linux example)
 pip install -r requirements.txt
-STB_HOST=0.0.0.0 python dashboard/app.py     # or gunicorn on the LAN
+STB_HOST=0.0.0.0 python3 dashboard/app.py     # or gunicorn on the LAN
 ```
 
 ### B. Deploy the dashboard shell to Render (this doc's focus)
