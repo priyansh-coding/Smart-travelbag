@@ -96,8 +96,17 @@ Optional — advisory AI panel (needs its own terminal):
 python3 ai_server/ai_server.py     # http://127.0.0.1:3000
 ```
 
-Open **http://127.0.0.1:5001**. With no hardware attached, the dashboard
-honestly shows *OFFLINE / NO DATA* — plug in the ESP32 below to light it up.
+Open **http://127.0.0.1:5001** — or, on a Mac, run:
+
+```bash
+open http://127.0.0.1:5001
+```
+
+(plain `Ctrl+click` on the URL in Terminal does **not** open it on macOS —
+it shows the context menu instead; use `open <url>` in the terminal.)
+
+With no hardware attached, the dashboard honestly shows *OFFLINE / NO DATA* —
+plug in the ESP32 below to light it up.
 
 ## Deploying to Render
 
