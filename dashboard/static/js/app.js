@@ -93,21 +93,30 @@
 
   function renderSidebar(device) {
     const conn = device.connection || 'offline';
-    $('sideDeviceDot').className = 'side-device-dot ' + (conn === 'online' ? 'live' : conn === 'stale' ? 'stale' : 'off');
+    const demo = !!device.demo;
+    $('sideDeviceDot').className = 'side-device-dot ' + (demo ? 'demo' : conn === 'online' ? 'live' : conn === 'stale' ? 'stale' : 'off');
     $('sideDeviceName').textContent = device.device_id || '—';
     $('sideWeight').textContent = device.weight_kg == null ? '–– kg' : `${device.weight_kg.toFixed(2)} kg`;
     const state = $('sideState');
-    state.textContent = conn.toUpperCase();
-    state.className = 'side-state ' + (conn === 'online' ? 'ok' : conn === 'stale' ? 'mid' : '');
+    state.textContent = demo ? 'DEMO' : conn.toUpperCase();
+    state.className = 'side-state ' + (demo ? 'demo' : conn === 'online' ? 'ok' : conn === 'stale' ? 'mid' : '');
+    const tag = $('sideDemoTag');
+    if (tag) tag.hidden = !demo;
   }
 
   /* ---------- header ---------- */
   function renderHeader(device) {
     const conn = device.connection || 'offline';
+    const demo = !!device.demo;
     const pill = $('connPill');
-    pill.classList.remove('online', 'stale', 'offline');
-    pill.classList.add(conn === 'online' ? 'online' : conn === 'stale' ? 'stale' : 'offline');
-    $('connText').textContent = conn.toUpperCase();
+    pill.classList.remove('online', 'stale', 'offline', 'demo');
+    if (demo) {
+      pill.classList.add('demo');
+      $('connText').textContent = 'DEMO';
+    } else {
+      pill.classList.add(conn === 'online' ? 'online' : conn === 'stale' ? 'stale' : 'offline');
+      $('connText').textContent = conn.toUpperCase();
+    }
     const updated = $('updatedChip');
     updated.textContent = device.posted_at ? `Updated ${fmtTime(device.posted_at)}` : 'Last update —';
   }
@@ -130,7 +139,18 @@
     const banner = $('securityBanner');
     const title = $('secTitle');
     const sub = $('secSub');
-    banner.classList.remove('warn', 'alert', 'offline');
+    banner.classList.remove('warn', 'alert', 'offline', 'demo');
+
+    if (device.demo) {
+      banner.classList.add('demo');
+      title.textContent = 'DEMO MODE — SIMULATED TELEMETRY';
+      sub.textContent = 'Every reading on this screen is fabricated for UI review. Connect the ESP32 to stop demo — it stops automatically.';
+      setChip('secChipLock', 'LOCK —', '');
+      setChip('secChipBag', 'BAG —', '');
+      setChip('secChipMove', 'MOTION —', '');
+      setChip('secChipGps', 'GPS —', '');
+      return;
+    }
 
     if (device.connection === 'offline') {
       banner.classList.add('offline');
@@ -182,14 +202,37 @@
       device.gps && device.gps.valid ? 'ok' : device.gps ? 'mid' : '');
   }
 
+  /* ---------- demo mode ---------- */
+  function renderDemoUI(demo) {
+    const ribbon = $('demoRibbon');
+    const btn = $('demoToggleBtn');
+    const btnText = $('demoToggleText');
+    if (ribbon) ribbon.hidden = !demo;
+    if (btn) {
+      btn.classList.toggle('on', !!demo);
+      btnText.textContent = demo ? 'Demo on' : 'Demo off';
+    }
+  }
+  async function toggleDemo() {
+    const demo = !!(last && last.device && last.device.demo);
+    try {
+      await postJSON(demo ? '/api/demo/stop' : '/api/demo/start');
+    } catch (_) {}
+    await poll();
+  }
+
   /* ---------- hero ---------- */
   function renderHero(device) {
     const chip = $('heroDeviceChip');
     const status = $('heroStatus');
-    chip.textContent = 'DEVICE — ' + (device.device_id || 'unknown');
+    const demo = !!device.demo;
+    chip.textContent = demo ? 'DEMO — SIMULATED' : 'DEVICE — ' + (device.device_id || 'unknown');
     chip.title = 'Source: ' + (device.usb_port || 'no device connected');
-    status.classList.remove('live', 'stale', 'offline');
-    if (device.connection === 'online') {
+    status.classList.remove('live', 'stale', 'offline', 'demo');
+    if (demo) {
+      status.textContent = 'DEMO';
+      status.classList.add('demo');
+    } else if (device.connection === 'online') {
       status.textContent = 'LIVE';
       status.classList.add('live');
     } else if (device.connection === 'stale') {
@@ -199,7 +242,8 @@
       status.textContent = 'OFFLINE';
       status.classList.add('offline');
     }
-    const state = device.connection === 'online' ? 'connected'
+    const state = demo ? 'simulated telemetry'
+      : device.connection === 'online' ? 'connected'
       : device.connection === 'stale' ? 'stale' : 'awaiting telemetry';
     $('heroCode').innerHTML = `let bag = device.current(); <em>&gt;</em> ${state}`;
   }
@@ -232,8 +276,11 @@
       chip.className = 'chip';
     } else {
       cap.textContent = `Calibrated · ${fmtAge(device.age_s)}`;
-      chip.textContent = device.connection === 'online' ? 'LIVE' : device.connection === 'stale' ? 'STALE' : 'NO DATA';
-      chip.className = 'chip' + (device.connection === 'online' ? ' ok' : '');
+      if (device.demo) { chip.textContent = 'DEMO'; chip.className = 'chip demo'; }
+      else {
+        chip.textContent = device.connection === 'online' ? 'LIVE' : device.connection === 'stale' ? 'STALE' : 'NO DATA';
+        chip.className = 'chip' + (device.connection === 'online' ? ' ok' : '');
+      }
     }
     $('weightStamp').textContent = v == null ? '—' : `${Math.min(100, (v / MAX_W) * 100).toFixed(0)}% OF MAX`;
 
@@ -295,8 +342,13 @@
       d.style.boxShadow = st === 'online' ? '0 0 8px rgba(3,195,123,.55)' : 'none';
     });
 
-    chip.textContent = `${online}/${MODULE_META.length} ONLINE`;
-    chip.className = 'chip' + (online === MODULE_META.length ? ' ok' : online > 0 ? ' warn' : '');
+    if (device.demo) {
+      chip.textContent = `${online}/${MODULE_META.length} · DEMO`;
+      chip.className = 'chip demo';
+    } else {
+      chip.textContent = `${online}/${MODULE_META.length} ONLINE`;
+      chip.className = 'chip' + (online === MODULE_META.length ? ' ok' : online > 0 ? ' warn' : '');
+    }
   }
 
   /* ---------- telemetry grid ---------- */
@@ -346,6 +398,8 @@
       </div>`).join('');
 
     count.textContent = String(total).padStart(2, '0');
+    const label = document.querySelector('.telemetry-label');
+    if (label) label.innerHTML = (last && last.device && last.device.demo) ? 'Simulated<br>Readings' : 'Live<br>Readings';
 
     strip.innerHTML = MODULE_META.map(m => {
       const st = sensors[m.key] || 'not_tested';
@@ -357,10 +411,11 @@
   function renderGps(device) {
     const gps = device.gps;
     const valid = gps && gps.valid && gps.latitude != null;
+    const demo = !!device.demo;
     $('mapWrap').classList.toggle('valid', !!valid);
     const chip = $('gpsChip');
-    chip.textContent = valid ? 'VALID FIX' : 'NO FIX';
-    chip.className = 'chip' + (valid ? ' ok' : '');
+    chip.textContent = demo ? (valid ? 'DEMO FIX' : 'DEMO') : (valid ? 'VALID FIX' : 'NO FIX');
+    chip.className = 'chip' + (demo ? ' demo' : (valid ? ' ok' : ''));
     $('gpsCoords').textContent = valid ? fmtCoords(gps) : 'No valid fix';
     const link = $('gpsLink');
     if (valid) {
@@ -428,6 +483,16 @@
     const expl = $('aiExplanation');
     const meta = $('aiMeta');
 
+    const demo = last && last.device && last.device.demo;
+    if (demo) {
+      chip.textContent = 'DEMO'; chip.className = 'chip demo';
+      cls.textContent = '—'; cls.className = 'ai-classification';
+      risk.textContent = 'Demo mode — not analysed';
+      expl.textContent = 'The simulated bag has no real snapshot to analyze. Stop demo and connect a real ESP32 to see advisory AI analysis.';
+      meta.textContent = 'Advisory only — not a theft detector';
+      return;
+    }
+
     if (!aiHistory) {
       chip.textContent = 'UNAVAILABLE'; chip.className = 'chip';
       cls.textContent = '—'; cls.className = 'ai-classification';
@@ -481,8 +546,10 @@
   /* ---------- footer ---------- */
   function renderFooter(device) {
     const conn = device.connection || 'offline';
-    $('footerDot').className = 'pulse-dot ' + (conn === 'online' ? 'live' : conn === 'stale' ? 'stale' : 'offline');
-    if (conn === 'online') $('footerStatus').textContent = `Live — age ${fmtAge(device.age_s)}`;
+    const demo = !!device.demo;
+    $('footerDot').className = 'pulse-dot ' + (demo ? 'demo' : conn === 'online' ? 'live' : conn === 'stale' ? 'stale' : 'offline');
+    if (demo) $('footerStatus').textContent = 'DEMO — simulated telemetry';
+    else if (conn === 'online') $('footerStatus').textContent = `Live — age ${fmtAge(device.age_s)}`;
     else if (conn === 'stale') $('footerStatus').textContent = `Stale — last update ${fmtAge(device.age_s)}`;
     else $('footerStatus').textContent = 'Offline — no telemetry received';
     $('footerMeta').textContent = device.posted_at
@@ -497,7 +564,11 @@
     const stats = $('trendStats');
     if (stats && window.STB_CHART) window.STB_CHART.stats(stats, history);
     const chip = $('trendChip');
-    if (chip) chip.textContent = history.length >= 2 ? 'LIVE TREND' : '—';
+    if (chip) {
+      const demo = last && last.device && last.device.demo;
+      chip.textContent = history.length >= 2 ? (demo ? 'DEMO TREND' : 'LIVE TREND') : '—';
+      chip.className = 'chip' + (demo && history.length >= 2 ? ' demo' : '');
+    }
   }
 
   function renderModuleTable(device) {
@@ -517,17 +588,20 @@
 
   /* ---------- master render ---------- */
   function render() {
+    const demo = last ? !!(last.device && last.device.demo) : false;
     if (!last) {
-      const d = { connection: 'offline', sensors: {}, age_s: null };
+      const d = { connection: 'offline', sensors: {}, age_s: null, demo: false };
       renderHeader(d); renderHero(d); renderBanner(d); renderWeight(d); renderHealth(d);
       renderTelemetry(d); renderGps(d); renderCamera(); renderAI(); renderEvents(); renderFooter(d);
       renderSidebar(d); renderTrend(); renderModuleTable(d); renderConnection();
+      renderDemoUI(false);
       return;
     }
     const d = last.device;
     renderHeader(d); renderHero(d); renderBanner(d); renderWeight(d); renderHealth(d);
     renderTelemetry(d); renderGps(d); renderCamera(); renderAI(); renderEvents(); renderFooter(d);
     renderSidebar(d); renderTrend(); renderModuleTable(d); renderConnection();
+    renderDemoUI(demo);
   }
 
   /* ---------- polling ---------- */
@@ -561,6 +635,10 @@
 
   /* ---------- AI ---------- */
   async function runAI() {
+    if (last && last.device && last.device.demo) {
+      renderAI();
+      return;
+    }
     try {
       const res = await postJSON('/api/analyze');
       aiHistory = (res.ok && res.result) ? res.result : null;
@@ -624,6 +702,25 @@
     const sub = $('connSub');
     const chip = $('connStatusChip');
     if (!big || !conn || !$('connEndpointUrl')) return;
+    if (conn.demo) {
+      big.textContent = 'DEMO';
+      big.className = 'conn-big demo';
+      chip.textContent = 'DEMO';
+      chip.className = 'chip demo';
+      sub.textContent = 'Demo telemetry is running — every value on screen is simulated. Stop demo to require a real ESP32.';
+      $('connDeviceId').textContent = conn.device_id || '—';
+      $('connUsbPort').textContent = '— (simulated)';
+      $('connUsbName').textContent = '—';
+      $('connUsbVidPid').textContent = '—';
+      $('connLastUpdate').textContent = conn.posted_at ? fmtTime(conn.posted_at) : '—';
+      $('connAge').textContent = conn.age_s == null ? '—' : `${conn.age_s}s (threshold ${(conn.stale_seconds || 10)}s)`;
+      $('connSeq').textContent = conn.seq == null ? '—' : `#${conn.seq}`;
+      $('connModules').textContent = `${conn.modules_reported || 0} / ${conn.modules_total || 9}`;
+      $('connParseErrors').textContent = String(conn.parse_errors || 0);
+      $('connLastEvent').textContent = conn.last_event ? `${conn.last_event.type} — ${conn.last_event.message}` : '—';
+      $('connEndpointUrl').textContent = 'DEMO — simulated telemetry loop';
+      return;
+    }
     const connName = conn.connection || 'offline';
     const port = conn.usb_port;
     const map = {
@@ -676,6 +773,11 @@
 
   /* ---------- AI button ---------- */
   $('aiAnalyzeBtn').addEventListener('click', runAI);
+
+  /* ---------- demo toggle ---------- */
+  $('demoToggleBtn').addEventListener('click', toggleDemo);
+  const stopBtn = $('demoStopBtn');
+  if (stopBtn) stopBtn.addEventListener('click', toggleDemo);
 
   /* ---------- events view button ---------- */
   $('viewAllEvents').addEventListener('click', () => setView('events'));

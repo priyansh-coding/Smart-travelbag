@@ -10,6 +10,7 @@ USB serial stream. With no device connected, the dashboard shows OFFLINE.
 """
 import json
 import logging
+import os
 import math
 import random
 import sys
@@ -61,11 +62,32 @@ class DeviceState:
         self.usb_port: Optional[str] = None           # port the worker is reading
         self.usb_parse_errors: int = 0                # malformed lines seen
 
+    def reset(self):
+        """Back to a clean, unknown state (demo stopped, or a fresh look)."""
+        self.device_id = None
+        self.received_at = None
+        self.posted_at = None
+        self.seq = None
+        self.weight_kg = None
+        self.locked = None
+        self.bag_open = None
+        self.movement_detected = None
+        self.acceleration = None
+        self.distance_cm = None
+        self.gps = {"valid": False, "latitude": None, "longitude": None, "fix_time": None}
+        self.sensors = {}
+        self.rfid_result = None
+        self.buzzer = None
+        # History is simulated in demo mode — clear it. Security events are
+        # never written by demo telemetry, so the ledger is kept.
+        self.history = []
+
     def snapshot(self) -> dict:
         now = time.time()
         age = (now - self.received_at) if self.received_at else None
         stale = age is None or age > Config.STALE_SECONDS
         return {
+            "demo": DEMO["active"],
             "device_id": self.device_id,
             "usb_port": self.usb_port,
             "received_at": self.received_at,
@@ -255,8 +277,17 @@ def _diff_and_record(prev: dict, new: dict):
         _add_event("gps_fix_lost", "GPS fix lost — no valid coordinates", "warning")
 
 
-def _apply_telemetry(clean: dict):
-    """Merge a validated payload into device state and record events."""
+def _apply_telemetry(clean: dict, source: str = "usb"):
+    """Merge a validated payload into device state and record events.
+
+    `source` distinguishes real ESP32 telemetry (usb) from simulated
+    demo telemetry (demo). Real telemetry always stops demo mode — a fake
+    payload must never mask a live device. Demo payloads merge into state
+    but never write security events — a simulated bag opening must not
+    look like a real access attempt.
+    """
+    if source != "demo" and DEMO["active"]:
+        _stop_demo()
     with state.lock:
         prev = state.snapshot()
         state.device_id = clean.get("device_id") or state.device_id
@@ -278,7 +309,8 @@ def _apply_telemetry(clean: dict):
         if "rfid_result" in clean: state.rfid_result = clean["rfid_result"]
         if "buzzer" in clean: state.buzzer = clean["buzzer"]
 
-    _diff_and_record(prev, state.snapshot())
+    if source != "demo":
+        _diff_and_record(prev, state.snapshot())
 
 
 # ---------------------------------------------------------------------------
@@ -406,6 +438,74 @@ def _usb_worker_loop():
 
 
 # ---------------------------------------------------------------------------
+# Demo mode — simulated telemetry for UI review. EXPLICITLY labelled: the
+# dashboard shows a DEMO ribbon and every pill/chip says DEMO while active.
+# Real telemetry always stops demo automatically.
+# ---------------------------------------------------------------------------
+DEMO = {"active": False, "thread": None, "seq": 0, "tick_s": 2.5}
+
+
+def _demo_payload() -> dict:
+    """A plausible sample payload — no network, no device, no claims."""
+    now = time.time()
+    DEMO["seq"] += 1
+    weight = round(4.6 + 2.1 * math.sin(now / 3.1) + random.uniform(-0.15, 0.15), 2)
+    distance = round(45.0 + 75.0 * abs(math.sin(now / 2.2)), 1)
+    lat = 42.3601 + 0.05 * math.sin(now / 12.0)
+    lon = -71.0589 + 0.05 * abs(math.cos(now / 12.0))
+    return {
+        "device_id": "smart-travel-bag-01",
+        "timestamp": _now_iso(),
+        "seq": DEMO["seq"],
+        "weight_kg": max(0.4, min(18.5, weight)),
+        "locked": random.random() > 0.06,
+        "bag_open": random.random() > 0.72,
+        "movement_detected": random.random() > 0.58,
+        "distance_cm": distance,
+        "gps": {"valid": True, "latitude": round(lat, 5),
+                "longitude": round(lon, 5), "fix_time": _now_iso()},
+        "sensors": {
+            "rfid": "online", "servo": "online", "hx711": "online",
+            "mpu6050": "online", "reed_switch": "online", "ultrasonic": "online",
+            "gps": "online", "buzzer": "online",
+            "esp32_cam": "online" if random.random() > 0.25 else "offline",
+        },
+        "rfid_result": random.choice(["accepted", "accepted", "unknown"]),
+        "buzzer": random.random() > 0.88,
+    }
+
+
+def _demo_loop():
+    while DEMO["active"]:
+        try:
+            clean, err = validate_payload(_demo_payload())
+            if not err:
+                _apply_telemetry(clean, source="demo")
+        except Exception as e:
+            log.warning("demo tick failed: %s", e)
+        time.sleep(DEMO["tick_s"])
+
+
+def _start_demo():
+    if DEMO["active"]:
+        return
+    DEMO["active"] = True
+    DEMO["seq"] = 0
+    DEMO["thread"] = threading.Thread(target=_demo_loop, name="stb-demo", daemon=True)
+    DEMO["thread"].start()
+    log.info("Demo mode ON — simulated telemetry, labelled as demo")
+
+
+def _stop_demo():
+    if not DEMO["active"]:
+        return
+    DEMO["active"] = False
+    with state.lock:
+        state.reset()
+    log.info("Demo mode OFF — simulated state cleared")
+
+
+# ---------------------------------------------------------------------------
 # AI analysis (advisory; never presented as a guarantee)
 # ---------------------------------------------------------------------------
 def _analyze() -> dict:
@@ -469,7 +569,7 @@ def _asset_version():
     from pathlib import Path
     root = Path(__file__).resolve().parent
     h = hashlib.md5()
-    for rel in ("static/css/style.css", "static/js/app.js", "static/js/matrix.js",
+    for rel in ("static/css/style.css", "static/js/app.js",
                 "static/js/map.js", "static/js/charts.js"):
         p = root / rel
         if p.exists():
@@ -524,6 +624,7 @@ def create_app():
         return jsonify({
             "ok": True,
             "mode": "usb-serial",
+            "demo": DEMO["active"],
             "hosted": Config.IS_HOSTED,
             "connected": snap["connection"] == "online",
             "connection": snap["connection"],
@@ -586,11 +687,26 @@ def create_app():
                         "counts": counts,
                         "total": len(Config.SENSOR_MODULES)})
 
+    @app.route("/api/demo/start", methods=["POST"])
+    def api_demo_start():
+        _start_demo()
+        return jsonify({"ok": True, "demo": True})
+
+    @app.route("/api/demo/stop", methods=["POST"])
+    def api_demo_stop():
+        _stop_demo()
+        return jsonify({"ok": True, "demo": False})
+
     @app.route("/api/config")
     def api_config():
         return jsonify({"ok": True, "config": public_config()})
 
     _start_usb_worker()
+    # Demo mode is on by default so the dashboard shows graphs before a
+    # real bag is attached. It is visibly labelled DEMO everywhere and any
+    # real ESP32 telemetry stops it automatically. Set STB_DEMO=0 to disable.
+    if os.environ.get("STB_DEMO", "1").lower() not in ("0", "false", "off", "no"):
+        _start_demo()
     return app
 
 
