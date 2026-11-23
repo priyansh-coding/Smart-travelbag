@@ -18,12 +18,12 @@
   <aside class="sidebar" id="sidebar" aria-label="App navigation">
     <div class="side-brand">
       <svg class="brand-mark" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-        <path d="M24 3 L42 11 V24 C42 34.4 34.8 42 24 45.5 C13.2 42 6 34.4 6 24 V11 Z" fill="url(#bg)" stroke="rgba(255,255,255,.25)" stroke-width="1.4"/>
-        <path d="M13 20.5 L24 15.5 L35 20.5 L35 38.5 L13 38.5 Z" fill="#101014" stroke="rgba(255,255,255,.14)" stroke-width="1.2"/>
-        <path d="M19 21.5 C19 17.5 29 17.5 29 21.5" stroke="#ff79fa" stroke-width="2.2" stroke-linecap="round"/>
-        <path d="M19 26.5 C19 24 29 24 29 26.5" stroke="#03c37b" stroke-width="2.2" stroke-linecap="round"/>
-        <rect x="22" y="29" width="4" height="5" rx="1.4" fill="#e7e7ec"/>
-        <defs><linearGradient id="bg" x1="0" y1="0" x2="48" y2="48"><stop offset="0" stop-color="#221c2e"/><stop offset="1" stop-color="#0e0e12"/></linearGradient></defs>
+        <rect x="2" y="2" width="44" height="44" rx="12" fill="#15151c" stroke="rgba(255,255,255,.10)"/>
+        <path d="M17.5 15 V10.5 a2.5 2.5 0 0 1 2.5 -2.5 h8 a2.5 2.5 0 0 1 2.5 2.5 V15" stroke="#e8b26a" stroke-width="2.2" stroke-linecap="round"/>
+        <rect x="10.5" y="15" width="27" height="21" rx="4.5" stroke="#e8e8ee" stroke-width="2.2" fill="rgba(255,255,255,.04)"/>
+        <line x1="24" y1="15.6" x2="24" y2="35.4" stroke="#e8b26a" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="3.4 3.2"/>
+        <circle cx="17.5" cy="40.5" r="2.3" fill="#e8e8ee"/>
+        <circle cx="30.5" cy="40.5" r="2.3" fill="#e8e8ee"/>
       </svg>
       <div class="side-brand-text">
         <div class="side-name">Smart Travel Bag</div>
@@ -55,6 +55,7 @@
       <div class="side-device-top">
         <span class="side-device-dot" id="sideDeviceDot"></span>
         <span class="side-device-name" id="sideDeviceName">—</span>
+        <span class="side-demo-tag" id="sideDemoTag" hidden>DEMO</span>
       </div>
       <div class="side-device-row">
         <span>Weight</span><b id="sideWeight">–– kg</b>
@@ -89,11 +90,21 @@
           <span class="conn-text" id="connText">OFFLINE</span>
         </div>
         <span class="updated-chip" id="updatedChip">Last update —</span>
+        <button class="demo-btn" id="demoToggleBtn" title="Toggle demo (simulated) telemetry" aria-label="Toggle demo telemetry">
+          <span class="demo-btn-dot"></span><span id="demoToggleText">Demo off</span>
+        </button>
         <button class="icon-btn" id="refreshBtn" title="Refresh data now" aria-label="Refresh data">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 4v5h-5"/></svg>
         </button>
       </div>
     </header>
+
+    <!-- Demo ribbon -->
+    <div class="demo-ribbon" id="demoRibbon" role="status" hidden>
+      <span class="demo-ribbon-dot" aria-hidden="true"></span>
+      <span class="demo-ribbon-text"><b>DEMO MODE</b> — simulated telemetry, nothing here is a real device · plug in the ESP32 to stop it automatically</span>
+      <button class="demo-ribbon-stop" id="demoStopBtn">Stop demo</button>
+    </div>
 
     <!-- Security banner -->
     <div class="security-banner" id="securityBanner" role="status" aria-live="polite">
@@ -119,9 +130,8 @@
       <section id="view-dashboard" class="view active" aria-label="Dashboard">
         <div class="dash-grid">
 
-          <!-- Hero (black & white terminal) -->
+          <!-- Hero (dot-matrix terminal) -->
           <article class="card hero" aria-label="Status terminal">
-            <canvas id="heroRain" aria-hidden="true"></canvas>
             <div class="hero-inner">
               <div class="hero-top">
                 <span class="hero-chip" id="heroDeviceChip">DEVICE —</span>
@@ -365,7 +375,6 @@
 
 <script src="{{ url_for('static', filename='vendor/d3-geo.min.js') }}?v={{ asset_v }}"></script>
 <script src="{{ url_for('static', filename='vendor/topojson-client.min.js') }}?v={{ asset_v }}"></script>
-<script src="{{ url_for('static', filename='js/matrix.js') }}?v={{ asset_v }}"></script>
 <script src="{{ url_for('static', filename='js/map.js') }}?v={{ asset_v }}"></script>
 <script src="{{ url_for('static', filename='js/charts.js') }}?v={{ asset_v }}"></script>
 <script src="{{ url_for('static', filename='js/app.js') }}?v={{ asset_v }}"></script>

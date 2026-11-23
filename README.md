@@ -7,8 +7,11 @@ review.
 
 > **Data honesty rule (PRD §4.3 / §10):** the dashboard shows **live device
 > values or explicit "No live data" labels**. It never presents sample data
-> as telemetry — and it does not ship a demo mode. Connect the ESP32 and the
-> screen lights up with its real values.
+> as telemetry. The **demo mode is a deliberate, visibly-labelled exception**:
+> it shows simulated values with a DEMO ribbon, DEMO chips and a DEMO pill in
+> every card state, so the graphs can be reviewed before the bag is attached.
+> It stops automatically the moment real ESP32 telemetry arrives. Connect the
+> ESP32 and the screen shows its real values.
 
 ---
 
@@ -105,8 +108,12 @@ open http://127.0.0.1:5001
 (plain `Ctrl+click` on the URL in Terminal does **not** open it on macOS —
 it shows the context menu instead; use `open <url>` in the terminal.)
 
-With no hardware attached, the dashboard honestly shows *OFFLINE / NO DATA* —
-plug in the ESP32 below to light it up.
+On boot the dashboard starts in **DEMO mode** (simulated telemetry, clearly
+labelled — amber DEMO ribbon, DEMO chips, DEMO status pill) so every graph is
+visible right away. Stop demo with the toggle in the top bar or the Stop button
+in the ribbon — then the dashboard honestly shows *OFFLINE / NO DATA* until the
+ESP32 is plugged in. **Real ESP32 telemetry stops demo mode automatically.** Set
+`STB_DEMO=0` to boot with demo mode off.
 
 ## Deploying to Render
 
@@ -163,6 +170,7 @@ All settings live in `dashboard/config.py`, with environment overrides:
 | `STB_CAMERA_URL` | unset | ESP32-CAM stream (e.g. `http://<your-esp32-cam-ip>:<port>/stream`) |
 | `STB_AI_URL` | `http://127.0.0.1:3000/analyze` | AI service endpoint |
 | `STB_AI_TIMEOUT` | `5` | AI call timeout (s) |
+| `STB_DEMO` | `1` (on) | Boot demo mode: simulated data, clearly labelled. Set `0`/`off` to boot with demo off |
 
 ## Views
 
@@ -171,9 +179,9 @@ The dashboard is a real app shell: a closable sidebar (persisted in
 control. The main area holds the header (view title, connection pill,
 last-update chip, refresh) and the security banner.
 
-- **Dashboard** — black & white terminal hero (falling hex-code streaks),
-  live weight + gauge, sensor-health matrix, 15-tile live telemetry grid,
-  dotted world map with GPS pin + arc, ESP32-CAM, AI panel, recent events.
+- **Dashboard** — dot-matrix terminal hero, live weight + rainbow gauge,
+  sensor-health matrix, live telemetry tile grid, dotted world map with GPS
+  pin + great-circle arc, ESP32-CAM, AI panel, recent events.
 - **Sensors** — weight trend chart + per-module detail table.
 - **Events** — full event history with severity/security filters.
 - **ESP32** — live connection state, USB port + device name + VID/PID,
