@@ -35,6 +35,8 @@
   let history = [];
   let aiHistory = null;
   let lastWeight = null;
+  let lastCount = null;
+  let seenEvents = new Set();
   let currentFilter = 'all';
 
   /* ---------- helpers ---------- */
@@ -255,7 +257,13 @@
 
   function renderWeight(device) {
     const v = device.weight_kg;
-    renderNumber($('weightVal'), v);
+    const bigEl = $('weightVal');
+    renderNumber(bigEl, v);
+    if (bigEl) {
+      const frac = v == null ? 0 : v / MAX_W;
+      bigEl.classList.toggle('lvl-warn', frac >= 0.7 && frac < 0.85);
+      bigEl.classList.toggle('lvl-high', frac >= 0.85);
+    }
     const cap = $('weightCap');
     const chip = $('weightChip');
     if (v == null) {
@@ -331,6 +339,22 @@
   }
 
   /* ---------- telemetry grid ---------- */
+  function animateCount(el, to) {
+    if (!el) return;
+    const target = String(to).padStart(2, '0');
+    if (lastCount === null) { lastCount = to; el.textContent = target; return; }
+    const from = lastCount; lastCount = to;
+    if (from === to) { el.textContent = target; return; }
+    const t0 = performance.now(); const dur = 620;
+    function step(now) {
+      const p = clamp((now - t0) / dur, 0, 1);
+      const e = 1 - Math.pow(1 - p, 3);
+      el.textContent = String(Math.round(from + (to - from) * e)).padStart(2, '0');
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
   function renderTelemetry(device) {
     const grid = $('telemetryGrid');
     const legend = $('telemetryLegend');
@@ -338,26 +362,32 @@
     const count = $('telemetryCount');
     const sensors = device.sensors || {};
 
+    const CAT = {
+      weight: '#22d3ee', lock: '#818cf8', bag: '#f472b6', motion: '#34d399',
+      distance: '#fb923c', gps: '#2dd4bf', rfid: '#e879f9', servo: '#a78bfa',
+      hx711: '#22d3ee', mpu6050: '#34d399', reed: '#f472b6', ultrasonic: '#fb923c',
+      buzzer: '#f87171', esp32_cam: '#60a5fa', ai_service: '#c084fc',
+    };
     const tiles = [
-      { name: 'Weight', val: device.weight_kg == null ? '—' : `${device.weight_kg.toFixed(2)} kg`, dot: device.weight_kg == null ? 'unknown' : 'online' },
-      { name: 'Lock', val: device.locked === true ? 'LOCKED' : device.locked === false ? 'UNLOCKED' : '—', dot: device.locked == null ? 'unknown' : device.locked ? 'online' : 'bad' },
-      { name: 'Bag', val: device.bag_open === true ? 'OPEN' : device.bag_open === false ? 'CLOSED' : '—', dot: device.bag_open == null ? 'unknown' : device.bag_open ? 'bad' : 'online' },
-      { name: 'Motion', val: device.movement_detected === true ? 'MOVING' : device.movement_detected === false ? 'STILL' : '—', dot: device.movement_detected == null ? 'unknown' : device.movement_detected ? 'warn' : 'online' },
-      { name: 'Distance', val: device.distance_cm == null ? '—' : `${device.distance_cm.toFixed(1)} cm`, dot: device.distance_cm == null ? 'unknown' : 'online' },
-      { name: 'GPS', val: device.gps && device.gps.valid ? 'FIX VALID' : 'NO FIX', dot: device.gps && device.gps.valid ? 'online' : 'unknown' },
-      { name: 'RFID', val: device.rfid_result ? device.rfid_result.replace('accepted', 'ACCEPTED').replace('rejected', 'REJECTED').toUpperCase() : '—', dot: device.rfid_result === 'accepted' ? 'online' : device.rfid_result === 'rejected' ? 'bad' : 'unknown' },
-      { name: 'Servo', val: sensors.servo === 'online' ? (device.locked === true ? 'LOCKED' : device.locked === false ? 'UNLOCKED' : 'ARMED') : 'OFFLINE', dot: sensors.servo === 'online' ? 'online' : 'unknown' },
-      { name: 'HX711', val: sensors.hx711 === 'online' ? (device.weight_kg == null ? 'NO READING' : 'READING') : (sensors.hx711 || '—').toUpperCase(), dot: sensors.hx711 === 'online' ? 'online' : 'unknown' },
-      { name: 'MPU6050', val: sensors.mpu6050 === 'online' ? (device.movement_detected === true ? 'MOVING' : 'IDLE') : (sensors.mpu6050 || '—').toUpperCase(), dot: sensors.mpu6050 === 'online' ? 'online' : 'unknown' },
-      { name: 'Reed', val: device.bag_open === true ? 'OPEN' : device.bag_open === false ? 'CLOSED' : '—', dot: device.bag_open == null ? 'unknown' : device.bag_open ? 'bad' : 'online' },
-      { name: 'Ultrasonic', val: device.distance_cm == null ? '—' : `${device.distance_cm.toFixed(1)} cm`, dot: device.distance_cm == null ? 'unknown' : 'online' },
-      { name: 'Buzzer', val: sensors.buzzer === 'error' ? 'ERROR' : (device.buzzer ? 'ALERT' : 'IDLE'), dot: sensors.buzzer === 'error' ? 'bad' : sensors.buzzer === 'online' ? 'online' : 'unknown' },
-      { name: 'ESP32-CAM', val: sensors.esp32_cam === 'online' ? 'MODULE OK' : (sensors.esp32_cam || 'OFFLINE').toUpperCase(), dot: sensors.esp32_cam === 'online' ? 'online' : 'unknown' },
-      { name: 'AI Service', val: aiHistory ? aiHistory.classification : '—', dot: aiHistory ? (aiHistory.classification === 'SAFE' ? 'online' : aiHistory.classification === 'WARNING' ? 'warn' : 'bad') : 'unknown' },
-    ];
+      { key: 'weight', val: device.weight_kg == null ? '—' : `${device.weight_kg.toFixed(2)} kg`, dot: device.weight_kg == null ? 'unknown' : 'online' },
+      { key: 'lock', val: device.locked === true ? 'LOCKED' : device.locked === false ? 'UNLOCKED' : '—', dot: device.locked == null ? 'unknown' : device.locked ? 'online' : 'bad' },
+      { key: 'bag', val: device.bag_open === true ? 'OPEN' : device.bag_open === false ? 'CLOSED' : '—', dot: device.bag_open == null ? 'unknown' : device.bag_open ? 'bad' : 'online' },
+      { key: 'motion', val: device.movement_detected === true ? 'MOVING' : device.movement_detected === false ? 'STILL' : '—', dot: device.movement_detected == null ? 'unknown' : device.movement_detected ? 'warn' : 'online' },
+      { key: 'distance', val: device.distance_cm == null ? '—' : `${device.distance_cm.toFixed(1)} cm`, dot: device.distance_cm == null ? 'unknown' : 'online' },
+      { key: 'gps', val: device.gps && device.gps.valid ? 'FIX VALID' : 'NO FIX', dot: device.gps && device.gps.valid ? 'online' : 'unknown' },
+      { key: 'rfid', val: device.rfid_result ? device.rfid_result.replace('accepted', 'ACCEPTED').replace('rejected', 'REJECTED').toUpperCase() : '—', dot: device.rfid_result === 'accepted' ? 'online' : device.rfid_result === 'rejected' ? 'bad' : 'unknown' },
+      { key: 'servo', val: sensors.servo === 'online' ? (device.locked === true ? 'LOCKED' : device.locked === false ? 'UNLOCKED' : 'ARMED') : 'OFFLINE', dot: sensors.servo === 'online' ? 'online' : 'unknown' },
+      { key: 'hx711', val: sensors.hx711 === 'online' ? (device.weight_kg == null ? 'NO READING' : 'READING') : (sensors.hx711 || '—').toUpperCase(), dot: sensors.hx711 === 'online' ? 'online' : 'unknown' },
+      { key: 'mpu6050', val: sensors.mpu6050 === 'online' ? (device.movement_detected === true ? 'MOVING' : 'IDLE') : (sensors.mpu6050 || '—').toUpperCase(), dot: sensors.mpu6050 === 'online' ? 'online' : 'unknown' },
+      { key: 'reed', val: device.bag_open === true ? 'OPEN' : device.bag_open === false ? 'CLOSED' : '—', dot: device.bag_open == null ? 'unknown' : device.bag_open ? 'bad' : 'online' },
+      { key: 'ultrasonic', val: device.distance_cm == null ? '—' : `${device.distance_cm.toFixed(1)} cm`, dot: device.distance_cm == null ? 'unknown' : 'online' },
+      { key: 'buzzer', val: sensors.buzzer === 'error' ? 'ERROR' : (device.buzzer ? 'ALERT' : 'IDLE'), dot: sensors.buzzer === 'error' ? 'bad' : sensors.buzzer === 'online' ? 'online' : 'unknown' },
+      { key: 'esp32_cam', val: sensors.esp32_cam === 'online' ? 'MODULE OK' : (sensors.esp32_cam || 'OFFLINE').toUpperCase(), dot: sensors.esp32_cam === 'online' ? 'online' : 'unknown' },
+      { key: 'ai_service', val: aiHistory ? aiHistory.classification : '—', dot: aiHistory ? (aiHistory.classification === 'SAFE' ? 'online' : aiHistory.classification === 'WARNING' ? 'warn' : 'bad') : 'unknown' },
+    ].map(t => ({ ...t, name: { weight: 'Weight', lock: 'Lock', bag: 'Bag', motion: 'Motion', distance: 'Distance', gps: 'GPS', rfid: 'RFID', servo: 'Servo', hx711: 'HX711', mpu6050: 'MPU6050', reed: 'Reed', ultrasonic: 'Ultrasonic', buzzer: 'Buzzer', esp32_cam: 'ESP32-CAM', ai_service: 'AI Service' }[t.key], cat: CAT[t.key] }));
 
     grid.innerHTML = tiles.map(t => `
-      <div class="tile">
+      <div class="tile ${t.dot === 'unknown' ? 'is-off' : ''}" style="--cat:${t.cat}">
         <span class="tile-dot ${t.dot}"></span>
         <div class="tile-name">${t.name}</div>
         <div class="tile-val">${t.val}</div>
@@ -376,7 +406,7 @@
         <span class="pct">${Math.round((counts[k] / total) * 100)}%</span>
       </div>`).join('');
 
-    count.textContent = String(total).padStart(2, '0');
+    animateCount(count, total);
     const label = document.querySelector('.telemetry-label');
     if (label) label.textContent = 'Readings';
 
@@ -479,9 +509,9 @@
   }
 
   /* ---------- events ---------- */
-  function evHTML(ev) {
+  function evHTML(ev, isNew) {
     const ago = fmtAgoTs(ev.ts);
-    return `<li>
+    return `<li class="${isNew ? 'is-new' : ''}">
       <span class="ev-dot ${ev.severity}"></span>
       <div class="ev-body">
         <div class="ev-msg">${escapeHTML(ev.message)}</div>
@@ -502,13 +532,15 @@
     $('eventsCount').textContent = String(events.length);
     $('eventsTotal').textContent = `${events.length} event${events.length === 1 ? '' : 's'}`;
 
-    $('eventList').innerHTML = events.slice(0, 5).map(evHTML).join('') ||
+    $('eventList').innerHTML = events.slice(0, 5).map(ev => evHTML(ev, !seenEvents.has(ev.id))).join('') ||
       `<li class="ev-empty">No events yet. They will appear here once the bag starts reporting.</li>`;
 
     const full = $('fullEventList');
     const filtered = filteredEvents();
-    full.innerHTML = filtered.map(evHTML).join('') ||
+    full.innerHTML = filtered.map(ev => evHTML(ev, !seenEvents.has(ev.id))).join('') ||
       `<li class="ev-empty">No matching events.</li>`;
+
+    seenEvents = new Set(events.map(ev => ev.id));
   }
 
   /* ---------- footer ---------- */
@@ -604,6 +636,11 @@
     try {
       const res = await postJSON('/api/analyze');
       aiHistory = (res.ok && res.result) ? res.result : null;
+      const card = document.querySelector('.card.ai');
+      if (card && aiHistory) {
+        card.classList.add('pulse');
+        setTimeout(() => card.classList.remove('pulse'), 1700);
+      }
     } catch (e) {
       aiHistory = null;
     }

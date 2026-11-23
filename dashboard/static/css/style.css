@@ -434,7 +434,8 @@ code { font-family: var(--mono); }
   min-height: 84px;
   position: relative;
   z-index: 1;
-  transition: transform .4s var(--ease), border-color .3s, background .35s, box-shadow .35s, backdrop-filter .35s;
+  will-change: transform;
+  transition: transform .4s var(--ease), border-color .3s, background .35s, box-shadow .35s, backdrop-filter .35s, opacity .3s;
 }
 .tile:hover {
   transform: translateY(-9px) scale(1.085);
@@ -445,10 +446,7 @@ code { font-family: var(--mono); }
   -webkit-backdrop-filter: blur(14px) saturate(1.25);
   box-shadow: 0 24px 52px -18px rgba(0,0,0,.75), inset 0 1px 0 rgba(255,255,255,.06);
 }
-.tile-dot { position: absolute; top: 10px; right: 11px; width: 7px; height: 7px; border-radius: 50%; background: #333; transition: all .3s; }
-.tile-dot.online { background: var(--green); }
-.tile-dot.warn { background: var(--yellow); }
-.tile-dot.bad { background: var(--coral); }
+.tile-dot { position: absolute; top: 10px; right: 11px; width: 7px; height: 7px; border-radius: 50%; transition: all .3s; }
 .tile-name { font-size: 11px; color: var(--text-2); letter-spacing: .03em; }
 .tile-val { font-family: var(--mono); font-size: 12px; font-weight: 600; color: #ececf2; margin-top: 12px; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .telemetry-strip { display: flex; gap: 3px; height: 18px; border-radius: 5px; overflow: hidden; }
@@ -791,3 +789,52 @@ body { animation: bg-drift 28s ease-in-out infinite alternate; }
 #view-dashboard > .dash-grid > .card:nth-child(7) { animation-delay: .44s; }
 #view-dashboard > .dash-grid > .card:nth-child(8) { animation-delay: .51s; }
 
+
+/* ============================================================
+   10/10 POLISH — gauge sweep, category dots, level tints,
+   event entrance, AI pulse
+   ============================================================ */
+.gauge-sweep {
+  stroke-dashoffset: -400;
+  animation: gauge-sweep 3.4s ease-in-out infinite;
+  opacity: .75;
+  pointer-events: none;
+}
+@keyframes gauge-sweep {
+  0%   { stroke-dashoffset: -400; opacity: 0; }
+  12%  { opacity: .75; }
+  88%  { opacity: .75; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+
+.telemetry-count {
+  background: linear-gradient(112deg, #7dd3fc 0%, #5eead4 45%, #c4b5fd 85%);
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+}
+
+.tile { --cat: #6b7280; }
+.tile-dot { background: var(--cat); }
+.tile.is-off { opacity: .55; }
+.tile.is-off:hover { opacity: .8; }
+
+.tile-name { position: relative; padding-left: 14px; }
+.tile-name::before {
+  content: ''; position: absolute; left: 0; top: 2px;
+  width: 7px; height: 7px; border-radius: 2.5px;
+  background: var(--cat);
+  box-shadow: 0 0 0 3px rgba(255,255,255,.045);
+}
+
+#weightVal.lvl-warn { color: #ffd166; }
+#weightVal.lvl-high { color: #ff8d7d; }
+
+@keyframes ev-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+.event-list li.is-new { animation: ev-in .55s var(--ease) both; }
+
+.card.ai.pulse { box-shadow: 0 0 0 1px rgba(125,211,252,.45), 0 24px 58px -26px rgba(125,211,252,.35); }
+
+.weight-big { transition: color .4s; }
