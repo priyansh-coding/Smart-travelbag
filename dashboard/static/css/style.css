@@ -91,7 +91,7 @@ code { font-family: var(--mono); }
   pointer-events: none;
 }
 .side-brand { display: flex; align-items: center; gap: 11px; padding: 0 4px; margin-bottom: 18px; }
-.brand-mark { width: 38px; height: 38px; flex: none; }
+.brand-logo { width: 40px; height: 44px; flex: none; object-fit: contain; object-position: center; }
 .side-brand-text { min-width: 0; }
 .side-name {
   font-weight: 700; font-size: 14.5px; letter-spacing: .1em; text-transform: uppercase;
@@ -251,8 +251,8 @@ code { font-family: var(--mono); }
 
 /* ============ VIEWS ============ */
 .views { padding: 16px 26px 18px; flex: 1; }
-.view { display: none; animation: view-in .45s var(--ease); }
-.view.active { display: block; }
+.view { display: none; }
+.view.active { display: block; animation: view-in .45s var(--ease) both; }
 @keyframes view-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 
 /* ============ DASHBOARD GRID ============ */
@@ -272,6 +272,10 @@ code { font-family: var(--mono); }
   position: relative;
   overflow: hidden;
   transition: border-color .35s, transform .35s var(--ease), box-shadow .35s;
+}
+.card:hover {
+  border-color: rgba(255,255,255,.11);
+  box-shadow: 0 26px 60px -34px rgba(0,0,0,.85);
 }
 .card:hover {
   border-color: var(--card-border-hi);
@@ -344,10 +348,15 @@ code { font-family: var(--mono); }
   transition: border-color .3s;
 }
 .hero-code em { color: var(--green); font-style: normal; font-weight: 700; }
-.cursor { position: absolute; width: 8px; height: 15px; background: #ffffff; animation: blink 1.05s steps(1) infinite; z-index: 2; display: none; }
-@keyframes blink { 50% { opacity: 0; } }
 .hero-hint { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--text-3); }
-
+.hero-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.hero-line .cursor {
+  display: inline-block; width: 8px; height: 12px;
+  background: #e8e8ee; border-radius: 1px;
+  animation: blink 1.05s steps(1) infinite;
+  flex: none;
+}
+@keyframes blink { 50% { opacity: 0; } }
 /* ---- weight ---- */
 .card.weight { grid-column: span 7; display: flex; flex-direction: column; }
 .weight-body { display: flex; flex-direction: column; align-items: center; flex: 1; justify-content: space-between; gap: 2px; }
@@ -745,3 +754,40 @@ code { font-family: var(--mono); }
 .security-banner[hidden] { display: none; }
 
 @keyframes pulse-white { 0%{box-shadow:0 0 0 0 rgba(232,232,238,.45)} 70%{box-shadow:0 0 0 7px rgba(232,232,238,0)} 100%{box-shadow:0 0 0 0 rgba(232,232,238,0)} }
+
+/* ============================================================
+   MOTION — entrance, drift, view transitions (all reduced-motion safe)
+   ============================================================ */
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(22px) scale(.985); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes view-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes bg-drift {
+  0%   { background-position: 0% 0%, 100% 0%, 50% 100%; }
+  100% { background-position: 12% 9%, 88% 6%, 50% 94%; }
+}
+@keyframes ring-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(255,255,255,.35); }
+  75%  { box-shadow: 0 0 0 9px rgba(255,255,255,0); }
+  100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+}
+
+body { animation: bg-drift 28s ease-in-out infinite alternate; }
+
+#view-dashboard > .dash-grid > .card {
+  opacity: 0;
+  animation: card-in .75s var(--ease) forwards;
+}
+#view-dashboard > .dash-grid > .card:nth-child(1) { animation-delay: .02s; }
+#view-dashboard > .dash-grid > .card:nth-child(2) { animation-delay: .09s; }
+#view-dashboard > .dash-grid > .card:nth-child(3) { animation-delay: .16s; }
+#view-dashboard > .dash-grid > .card:nth-child(4) { animation-delay: .23s; }
+#view-dashboard > .dash-grid > .card:nth-child(5) { animation-delay: .30s; }
+#view-dashboard > .dash-grid > .card:nth-child(6) { animation-delay: .37s; }
+#view-dashboard > .dash-grid > .card:nth-child(7) { animation-delay: .44s; }
+#view-dashboard > .dash-grid > .card:nth-child(8) { animation-delay: .51s; }
+
