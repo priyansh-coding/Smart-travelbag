@@ -35,6 +35,8 @@
   let history = [];
   let aiHistory = null;
   let lastWeight = null;
+  let lastCount = null;
+  let seenEvents = new Set();
   let currentFilter = 'all';
 
   /* ---------- helpers ---------- */
@@ -93,15 +95,12 @@
 
   function renderSidebar(device) {
     const conn = device.connection || 'offline';
-    const demo = !!device.demo;
-    $('sideDeviceDot').className = 'side-device-dot ' + (demo ? 'demo' : conn === 'online' ? 'live' : conn === 'stale' ? 'stale' : 'off');
+    $('sideDeviceDot').className = 'side-device-dot ' + (conn === 'online' ? 'live' : conn === 'stale' ? 'stale' : 'off');
     $('sideDeviceName').textContent = device.device_id || '—';
     $('sideWeight').textContent = device.weight_kg == null ? '–– kg' : `${device.weight_kg.toFixed(2)} kg`;
     const state = $('sideState');
-    state.textContent = demo ? 'DEMO' : conn.toUpperCase();
-    state.className = 'side-state ' + (demo ? 'demo' : conn === 'online' ? 'ok' : conn === 'stale' ? 'mid' : '');
-    const tag = $('sideDemoTag');
-    if (tag) tag.hidden = !demo;
+    state.textContent = conn.toUpperCase();
+    state.className = 'side-state ' + (conn === 'online' ? 'ok' : conn === 'stale' ? 'mid' : '');
   }
 
   /* ---------- header ---------- */
@@ -141,16 +140,12 @@
     const sub = $('secSub');
     banner.classList.remove('warn', 'alert', 'offline', 'demo');
 
+    // Demo mode must not claim a real security state — hide the banner.
     if (device.demo) {
-      banner.classList.add('demo');
-      title.textContent = 'DEMO MODE — SIMULATED TELEMETRY';
-      sub.textContent = 'Every reading on this screen is fabricated for UI review. Connect the ESP32 to stop demo — it stops automatically.';
-      setChip('secChipLock', 'LOCK —', '');
-      setChip('secChipBag', 'BAG —', '');
-      setChip('secChipMove', 'MOTION —', '');
-      setChip('secChipGps', 'GPS —', '');
+      banner.hidden = true;
       return;
     }
+    banner.hidden = false;
 
     if (device.connection === 'offline') {
       banner.classList.add('offline');
@@ -225,14 +220,10 @@
   function renderHero(device) {
     const chip = $('heroDeviceChip');
     const status = $('heroStatus');
-    const demo = !!device.demo;
-    chip.textContent = demo ? 'DEMO — SIMULATED' : 'DEVICE — ' + (device.device_id || 'unknown');
+    chip.textContent = 'DEVICE — ' + (device.device_id || 'unknown');
     chip.title = 'Source: ' + (device.usb_port || 'no device connected');
     status.classList.remove('live', 'stale', 'offline', 'demo');
-    if (demo) {
-      status.textContent = 'DEMO';
-      status.classList.add('demo');
-    } else if (device.connection === 'online') {
+    if (device.connection === 'online') {
       status.textContent = 'LIVE';
       status.classList.add('live');
     } else if (device.connection === 'stale') {
@@ -242,8 +233,7 @@
       status.textContent = 'OFFLINE';
       status.classList.add('offline');
     }
-    const state = demo ? 'simulated telemetry'
-      : device.connection === 'online' ? 'connected'
+    const state = device.connection === 'online' ? 'connected'
       : device.connection === 'stale' ? 'stale' : 'awaiting telemetry';
     $('heroCode').innerHTML = `let bag = device.current(); <em>&gt;</em> ${state}`;
   }
@@ -267,7 +257,13 @@
 
   function renderWeight(device) {
     const v = device.weight_kg;
-    renderNumber($('weightVal'), v);
+    const bigEl = $('weightVal');
+    renderNumber(bigEl, v);
+    if (bigEl) {
+      const frac = v == null ? 0 : v / MAX_W;
+      bigEl.classList.toggle('lvl-warn', frac >= 0.7 && frac < 0.85);
+      bigEl.classList.toggle('lvl-high', frac >= 0.85);
+    }
     const cap = $('weightCap');
     const chip = $('weightChip');
     if (v == null) {
@@ -276,11 +272,8 @@
       chip.className = 'chip';
     } else {
       cap.textContent = `Calibrated · ${fmtAge(device.age_s)}`;
-      if (device.demo) { chip.textContent = 'DEMO'; chip.className = 'chip demo'; }
-      else {
-        chip.textContent = device.connection === 'online' ? 'LIVE' : device.connection === 'stale' ? 'STALE' : 'NO DATA';
-        chip.className = 'chip' + (device.connection === 'online' ? ' ok' : '');
-      }
+      chip.textContent = device.connection === 'online' ? 'LIVE' : device.connection === 'stale' ? 'STALE' : 'NO DATA';
+      chip.className = 'chip' + (device.connection === 'online' ? ' ok' : '');
     }
     $('weightStamp').textContent = v == null ? '—' : `${Math.min(100, (v / MAX_W) * 100).toFixed(0)}% OF MAX`;
 
@@ -339,19 +332,29 @@
       d.style.background = st === 'online' ? '#03c37b'
         : st === 'offline' ? '#3d3d49'
         : st === 'error' ? '#ff7d6b' : '#a86bd6';
-      d.style.boxShadow = st === 'online' ? '0 0 8px rgba(3,195,123,.55)' : 'none';
     });
 
-    if (device.demo) {
-      chip.textContent = `${online}/${MODULE_META.length} · DEMO`;
-      chip.className = 'chip demo';
-    } else {
-      chip.textContent = `${online}/${MODULE_META.length} ONLINE`;
-      chip.className = 'chip' + (online === MODULE_META.length ? ' ok' : online > 0 ? ' warn' : '');
-    }
+    chip.textContent = `${online}/${MODULE_META.length} ONLINE`;
+    chip.className = 'chip' + (online === MODULE_META.length ? ' ok' : online > 0 ? ' warn' : '');
   }
 
   /* ---------- telemetry grid ---------- */
+  function animateCount(el, to) {
+    if (!el) return;
+    const target = String(to).padStart(2, '0');
+    if (lastCount === null) { lastCount = to; el.textContent = target; return; }
+    const from = lastCount; lastCount = to;
+    if (from === to) { el.textContent = target; return; }
+    const t0 = performance.now(); const dur = 620;
+    function step(now) {
+      const p = clamp((now - t0) / dur, 0, 1);
+      const e = 1 - Math.pow(1 - p, 3);
+      el.textContent = String(Math.round(from + (to - from) * e)).padStart(2, '0');
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
   function renderTelemetry(device) {
     const grid = $('telemetryGrid');
     const legend = $('telemetryLegend');
@@ -359,26 +362,32 @@
     const count = $('telemetryCount');
     const sensors = device.sensors || {};
 
+    const CAT = {
+      weight: '#22d3ee', lock: '#818cf8', bag: '#f472b6', motion: '#34d399',
+      distance: '#fb923c', gps: '#2dd4bf', rfid: '#e879f9', servo: '#a78bfa',
+      hx711: '#22d3ee', mpu6050: '#34d399', reed: '#f472b6', ultrasonic: '#fb923c',
+      buzzer: '#f87171', esp32_cam: '#60a5fa', ai_service: '#c084fc',
+    };
     const tiles = [
-      { name: 'Weight', val: device.weight_kg == null ? '—' : `${device.weight_kg.toFixed(2)} kg`, dot: device.weight_kg == null ? 'unknown' : 'online' },
-      { name: 'Lock', val: device.locked === true ? 'LOCKED' : device.locked === false ? 'UNLOCKED' : '—', dot: device.locked == null ? 'unknown' : device.locked ? 'online' : 'bad' },
-      { name: 'Bag', val: device.bag_open === true ? 'OPEN' : device.bag_open === false ? 'CLOSED' : '—', dot: device.bag_open == null ? 'unknown' : device.bag_open ? 'bad' : 'online' },
-      { name: 'Motion', val: device.movement_detected === true ? 'MOVING' : device.movement_detected === false ? 'STILL' : '—', dot: device.movement_detected == null ? 'unknown' : device.movement_detected ? 'warn' : 'online' },
-      { name: 'Distance', val: device.distance_cm == null ? '—' : `${device.distance_cm.toFixed(1)} cm`, dot: device.distance_cm == null ? 'unknown' : 'online' },
-      { name: 'GPS', val: device.gps && device.gps.valid ? 'FIX VALID' : 'NO FIX', dot: device.gps && device.gps.valid ? 'online' : 'unknown' },
-      { name: 'RFID', val: device.rfid_result ? device.rfid_result.replace('accepted', 'ACCEPTED').replace('rejected', 'REJECTED').toUpperCase() : '—', dot: device.rfid_result === 'accepted' ? 'online' : device.rfid_result === 'rejected' ? 'bad' : 'unknown' },
-      { name: 'Servo', val: sensors.servo === 'online' ? (device.locked === true ? 'LOCKED' : device.locked === false ? 'UNLOCKED' : 'ARMED') : 'OFFLINE', dot: sensors.servo === 'online' ? 'online' : 'unknown' },
-      { name: 'HX711', val: sensors.hx711 === 'online' ? (device.weight_kg == null ? 'NO READING' : 'READING') : (sensors.hx711 || '—').toUpperCase(), dot: sensors.hx711 === 'online' ? 'online' : 'unknown' },
-      { name: 'MPU6050', val: sensors.mpu6050 === 'online' ? (device.movement_detected === true ? 'MOVING' : 'IDLE') : (sensors.mpu6050 || '—').toUpperCase(), dot: sensors.mpu6050 === 'online' ? 'online' : 'unknown' },
-      { name: 'Reed', val: device.bag_open === true ? 'OPEN' : device.bag_open === false ? 'CLOSED' : '—', dot: device.bag_open == null ? 'unknown' : device.bag_open ? 'bad' : 'online' },
-      { name: 'Ultrasonic', val: device.distance_cm == null ? '—' : `${device.distance_cm.toFixed(1)} cm`, dot: device.distance_cm == null ? 'unknown' : 'online' },
-      { name: 'Buzzer', val: sensors.buzzer === 'error' ? 'ERROR' : (device.buzzer ? 'ALERT' : 'IDLE'), dot: sensors.buzzer === 'error' ? 'bad' : sensors.buzzer === 'online' ? 'online' : 'unknown' },
-      { name: 'ESP32-CAM', val: sensors.esp32_cam === 'online' ? 'MODULE OK' : (sensors.esp32_cam || 'OFFLINE').toUpperCase(), dot: sensors.esp32_cam === 'online' ? 'online' : 'unknown' },
-      { name: 'AI Service', val: aiHistory ? aiHistory.classification : '—', dot: aiHistory ? (aiHistory.classification === 'SAFE' ? 'online' : aiHistory.classification === 'WARNING' ? 'warn' : 'bad') : 'unknown' },
-    ];
+      { key: 'weight', val: device.weight_kg == null ? '—' : `${device.weight_kg.toFixed(2)} kg`, dot: device.weight_kg == null ? 'unknown' : 'online' },
+      { key: 'lock', val: device.locked === true ? 'LOCKED' : device.locked === false ? 'UNLOCKED' : '—', dot: device.locked == null ? 'unknown' : device.locked ? 'online' : 'bad' },
+      { key: 'bag', val: device.bag_open === true ? 'OPEN' : device.bag_open === false ? 'CLOSED' : '—', dot: device.bag_open == null ? 'unknown' : device.bag_open ? 'bad' : 'online' },
+      { key: 'motion', val: device.movement_detected === true ? 'MOVING' : device.movement_detected === false ? 'STILL' : '—', dot: device.movement_detected == null ? 'unknown' : device.movement_detected ? 'warn' : 'online' },
+      { key: 'distance', val: device.distance_cm == null ? '—' : `${device.distance_cm.toFixed(1)} cm`, dot: device.distance_cm == null ? 'unknown' : 'online' },
+      { key: 'gps', val: device.gps && device.gps.valid ? 'FIX VALID' : 'NO FIX', dot: device.gps && device.gps.valid ? 'online' : 'unknown' },
+      { key: 'rfid', val: device.rfid_result ? device.rfid_result.replace('accepted', 'ACCEPTED').replace('rejected', 'REJECTED').toUpperCase() : '—', dot: device.rfid_result === 'accepted' ? 'online' : device.rfid_result === 'rejected' ? 'bad' : 'unknown' },
+      { key: 'servo', val: sensors.servo === 'online' ? (device.locked === true ? 'LOCKED' : device.locked === false ? 'UNLOCKED' : 'ARMED') : 'OFFLINE', dot: sensors.servo === 'online' ? 'online' : 'unknown' },
+      { key: 'hx711', val: sensors.hx711 === 'online' ? (device.weight_kg == null ? 'NO READING' : 'READING') : (sensors.hx711 || '—').toUpperCase(), dot: sensors.hx711 === 'online' ? 'online' : 'unknown' },
+      { key: 'mpu6050', val: sensors.mpu6050 === 'online' ? (device.movement_detected === true ? 'MOVING' : 'IDLE') : (sensors.mpu6050 || '—').toUpperCase(), dot: sensors.mpu6050 === 'online' ? 'online' : 'unknown' },
+      { key: 'reed', val: device.bag_open === true ? 'OPEN' : device.bag_open === false ? 'CLOSED' : '—', dot: device.bag_open == null ? 'unknown' : device.bag_open ? 'bad' : 'online' },
+      { key: 'ultrasonic', val: device.distance_cm == null ? '—' : `${device.distance_cm.toFixed(1)} cm`, dot: device.distance_cm == null ? 'unknown' : 'online' },
+      { key: 'buzzer', val: sensors.buzzer === 'error' ? 'ERROR' : (device.buzzer ? 'ALERT' : 'IDLE'), dot: sensors.buzzer === 'error' ? 'bad' : sensors.buzzer === 'online' ? 'online' : 'unknown' },
+      { key: 'esp32_cam', val: sensors.esp32_cam === 'online' ? 'MODULE OK' : (sensors.esp32_cam || 'OFFLINE').toUpperCase(), dot: sensors.esp32_cam === 'online' ? 'online' : 'unknown' },
+      { key: 'ai_service', val: aiHistory ? aiHistory.classification : '—', dot: aiHistory ? (aiHistory.classification === 'SAFE' ? 'online' : aiHistory.classification === 'WARNING' ? 'warn' : 'bad') : 'unknown' },
+    ].map(t => ({ ...t, name: { weight: 'Weight', lock: 'Lock', bag: 'Bag', motion: 'Motion', distance: 'Distance', gps: 'GPS', rfid: 'RFID', servo: 'Servo', hx711: 'HX711', mpu6050: 'MPU6050', reed: 'Reed', ultrasonic: 'Ultrasonic', buzzer: 'Buzzer', esp32_cam: 'ESP32-CAM', ai_service: 'AI Service' }[t.key], cat: CAT[t.key] }));
 
     grid.innerHTML = tiles.map(t => `
-      <div class="tile">
+      <div class="tile ${t.dot === 'unknown' ? 'is-off' : ''}" style="--cat:${t.cat}">
         <span class="tile-dot ${t.dot}"></span>
         <div class="tile-name">${t.name}</div>
         <div class="tile-val">${t.val}</div>
@@ -397,9 +406,9 @@
         <span class="pct">${Math.round((counts[k] / total) * 100)}%</span>
       </div>`).join('');
 
-    count.textContent = String(total).padStart(2, '0');
+    animateCount(count, total);
     const label = document.querySelector('.telemetry-label');
-    if (label) label.innerHTML = (last && last.device && last.device.demo) ? 'Simulated<br>Readings' : 'Live<br>Readings';
+    if (label) label.textContent = 'Readings';
 
     strip.innerHTML = MODULE_META.map(m => {
       const st = sensors[m.key] || 'not_tested';
@@ -411,11 +420,10 @@
   function renderGps(device) {
     const gps = device.gps;
     const valid = gps && gps.valid && gps.latitude != null;
-    const demo = !!device.demo;
     $('mapWrap').classList.toggle('valid', !!valid);
     const chip = $('gpsChip');
-    chip.textContent = demo ? (valid ? 'DEMO FIX' : 'DEMO') : (valid ? 'VALID FIX' : 'NO FIX');
-    chip.className = 'chip' + (demo ? ' demo' : (valid ? ' ok' : ''));
+    chip.textContent = valid ? 'VALID FIX' : 'NO FIX';
+    chip.className = 'chip' + (valid ? ' ok' : '');
     $('gpsCoords').textContent = valid ? fmtCoords(gps) : 'No valid fix';
     const link = $('gpsLink');
     if (valid) {
@@ -483,16 +491,6 @@
     const expl = $('aiExplanation');
     const meta = $('aiMeta');
 
-    const demo = last && last.device && last.device.demo;
-    if (demo) {
-      chip.textContent = 'DEMO'; chip.className = 'chip demo';
-      cls.textContent = '—'; cls.className = 'ai-classification';
-      risk.textContent = 'Demo mode — not analysed';
-      expl.textContent = 'The simulated bag has no real snapshot to analyze. Stop demo and connect a real ESP32 to see advisory AI analysis.';
-      meta.textContent = 'Advisory only — not a theft detector';
-      return;
-    }
-
     if (!aiHistory) {
       chip.textContent = 'UNAVAILABLE'; chip.className = 'chip';
       cls.textContent = '—'; cls.className = 'ai-classification';
@@ -511,9 +509,9 @@
   }
 
   /* ---------- events ---------- */
-  function evHTML(ev) {
+  function evHTML(ev, isNew) {
     const ago = fmtAgoTs(ev.ts);
-    return `<li>
+    return `<li class="${isNew ? 'is-new' : ''}">
       <span class="ev-dot ${ev.severity}"></span>
       <div class="ev-body">
         <div class="ev-msg">${escapeHTML(ev.message)}</div>
@@ -534,22 +532,22 @@
     $('eventsCount').textContent = String(events.length);
     $('eventsTotal').textContent = `${events.length} event${events.length === 1 ? '' : 's'}`;
 
-    $('eventList').innerHTML = events.slice(0, 5).map(evHTML).join('') ||
+    $('eventList').innerHTML = events.slice(0, 5).map(ev => evHTML(ev, !seenEvents.has(ev.id))).join('') ||
       `<li class="ev-empty">No events yet. They will appear here once the bag starts reporting.</li>`;
 
     const full = $('fullEventList');
     const filtered = filteredEvents();
-    full.innerHTML = filtered.map(evHTML).join('') ||
+    full.innerHTML = filtered.map(ev => evHTML(ev, !seenEvents.has(ev.id))).join('') ||
       `<li class="ev-empty">No matching events.</li>`;
+
+    seenEvents = new Set(events.map(ev => ev.id));
   }
 
   /* ---------- footer ---------- */
   function renderFooter(device) {
     const conn = device.connection || 'offline';
-    const demo = !!device.demo;
-    $('footerDot').className = 'pulse-dot ' + (demo ? 'demo' : conn === 'online' ? 'live' : conn === 'stale' ? 'stale' : 'offline');
-    if (demo) $('footerStatus').textContent = 'DEMO — simulated telemetry';
-    else if (conn === 'online') $('footerStatus').textContent = `Live — age ${fmtAge(device.age_s)}`;
+    $('footerDot').className = 'pulse-dot ' + (conn === 'online' ? 'live' : conn === 'stale' ? 'stale' : 'offline');
+    if (conn === 'online') $('footerStatus').textContent = `Live — age ${fmtAge(device.age_s)}`;
     else if (conn === 'stale') $('footerStatus').textContent = `Stale — last update ${fmtAge(device.age_s)}`;
     else $('footerStatus').textContent = 'Offline — no telemetry received';
     $('footerMeta').textContent = device.posted_at
@@ -564,11 +562,7 @@
     const stats = $('trendStats');
     if (stats && window.STB_CHART) window.STB_CHART.stats(stats, history);
     const chip = $('trendChip');
-    if (chip) {
-      const demo = last && last.device && last.device.demo;
-      chip.textContent = history.length >= 2 ? (demo ? 'DEMO TREND' : 'LIVE TREND') : '—';
-      chip.className = 'chip' + (demo && history.length >= 2 ? ' demo' : '');
-    }
+    if (chip) chip.textContent = history.length >= 2 ? 'LIVE TREND' : '—';
   }
 
   function renderModuleTable(device) {
@@ -642,6 +636,11 @@
     try {
       const res = await postJSON('/api/analyze');
       aiHistory = (res.ok && res.result) ? res.result : null;
+      const card = document.querySelector('.card.ai');
+      if (card && aiHistory) {
+        card.classList.add('pulse');
+        setTimeout(() => card.classList.remove('pulse'), 1700);
+      }
     } catch (e) {
       aiHistory = null;
     }
@@ -718,7 +717,7 @@
       $('connModules').textContent = `${conn.modules_reported || 0} / ${conn.modules_total || 9}`;
       $('connParseErrors').textContent = String(conn.parse_errors || 0);
       $('connLastEvent').textContent = conn.last_event ? `${conn.last_event.type} — ${conn.last_event.message}` : '—';
-      $('connEndpointUrl').textContent = 'DEMO — simulated telemetry loop';
+      $('connEndpointUrl').textContent = 'Demo mode — simulated telemetry loop';
       return;
     }
     const connName = conn.connection || 'offline';

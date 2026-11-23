@@ -6,6 +6,7 @@
 <title>Smart Travel Bag · IoT Security Dashboard</title>
 <meta name="description" content="Real-time IoT dashboard for the Smart Travel Bag — weight, lock, bag state, movement, GPS, camera, AI-assisted analysis and event history.">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ asset_v }}">
+<link rel="icon" type="image/png" href="{{ url_for('static', filename='logo-mark.png') }}?v={{ asset_v }}">
 <script>
   window.__STB_CONFIG__ = {{ public_config | tojson }};
 </script>
@@ -17,14 +18,7 @@
   <!-- ======================= SIDEBAR ======================= -->
   <aside class="sidebar" id="sidebar" aria-label="App navigation">
     <div class="side-brand">
-      <svg class="brand-mark" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-        <rect x="2" y="2" width="44" height="44" rx="12" fill="#15151c" stroke="rgba(255,255,255,.10)"/>
-        <path d="M17.5 15 V10.5 a2.5 2.5 0 0 1 2.5 -2.5 h8 a2.5 2.5 0 0 1 2.5 2.5 V15" stroke="#e8b26a" stroke-width="2.2" stroke-linecap="round"/>
-        <rect x="10.5" y="15" width="27" height="21" rx="4.5" stroke="#e8e8ee" stroke-width="2.2" fill="rgba(255,255,255,.04)"/>
-        <line x1="24" y1="15.6" x2="24" y2="35.4" stroke="#e8b26a" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="3.4 3.2"/>
-        <circle cx="17.5" cy="40.5" r="2.3" fill="#e8e8ee"/>
-        <circle cx="30.5" cy="40.5" r="2.3" fill="#e8e8ee"/>
-      </svg>
+      <img class="brand-logo" src="{{ url_for('static', filename='logo-mark.png') }}?v={{ asset_v }}" alt="Smart Travel Bag logo">
       <div class="side-brand-text">
         <div class="side-name">Smart Travel Bag</div>
         <div class="side-name-sub">IoT Security Dashboard</div>
@@ -55,7 +49,6 @@
       <div class="side-device-top">
         <span class="side-device-dot" id="sideDeviceDot"></span>
         <span class="side-device-name" id="sideDeviceName">—</span>
-        <span class="side-demo-tag" id="sideDemoTag" hidden>DEMO</span>
       </div>
       <div class="side-device-row">
         <span>Weight</span><b id="sideWeight">–– kg</b>
@@ -139,8 +132,10 @@
               </div>
               <h1 class="hero-title"><span>Hello,</span><span>Traveler</span></h1>
               <div class="hero-terminal">
-                <code class="hero-code" id="heroCode">let bag = device.current(); <em>&gt;</em> awaiting telemetry</code>
-                <span class="cursor" aria-hidden="true"></span>
+                <div class="hero-line">
+                  <code class="hero-code" id="heroCode">let bag = device.current(); <em>&gt;</em> awaiting telemetry</code>
+                  <span class="cursor" aria-hidden="true"></span>
+                </div>
                 <div class="hero-hint">The terminal is open — type nothing, just explore</div>
               </div>
             </div>
@@ -168,6 +163,7 @@
                 </defs>
                 <path d="M 25 145 A 125 125 0 0 1 275 145" fill="none" stroke="url(#gaugeDim)" stroke-width="16" stroke-linecap="round"/>
                 <path id="gaugeArc" d="M 25 145 A 125 125 0 0 1 275 145" fill="none" stroke="url(#gaugeGrad)" stroke-width="16" stroke-linecap="round" stroke-dasharray="0 9999"/>
+                <path class="gauge-sweep" d="M 25 145 A 125 125 0 0 1 275 145" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="16" stroke-linecap="round" stroke-dasharray="18 400"/>
                 <circle class="tick" cx="25" cy="145" r="4" fill="#c9c9d4"/>
                 <circle class="tick" cx="275" cy="145" r="4" fill="#c9c9d4"/>
                 <circle id="gaugeKnob" class="knob" cx="25" cy="145" r="9" fill="#f2f2f5" stroke="#16161a" stroke-width="3"/>
