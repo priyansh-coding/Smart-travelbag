@@ -325,7 +325,6 @@ code { font-family: var(--mono); }
   white-space: nowrap;
 }
 .hero-status.live { color: #7df0c1; border-color: rgba(3,195,123,.45); }
-.hero-status.demo { color: #ffd28a; border-color: rgba(239,171,89,.45); }
 
 .hero-status.stale { color: #ffe08a; border-color: rgba(239,201,54,.45); }
 .hero-status.offline { color: var(--coral); border-color: rgba(255,125,107,.38); }
@@ -420,15 +419,15 @@ code { font-family: var(--mono); }
 .telemetry-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; flex: 1; }
 .tile {
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255,255,255,.045);
+  border: 1px solid rgba(255,255,255,.05);
   border-radius: 14px;
   padding: 11px 12px 10px;
   display: flex; flex-direction: column; justify-content: space-between;
   min-height: 84px;
   position: relative;
-  transition: transform .25s var(--ease), border-color .25s, background .25s, box-shadow .25s;
+  transition: transform .3s var(--ease), border-color .3s, background .3s, box-shadow .3s;
 }
-.tile:hover { transform: translateY(-2px); border-color: rgba(255,255,255,.16); background: rgba(255,255,255,.05); }
+.tile:hover { transform: scale(1.045); border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.055); }
 .tile-dot { position: absolute; top: 10px; right: 11px; width: 7px; height: 7px; border-radius: 50%; background: #333; transition: all .3s; }
 .tile-dot.online { background: var(--green); }
 .tile-dot.warn { background: var(--yellow); }
@@ -713,14 +712,6 @@ code { font-family: var(--mono); }
 }
 .demo-ribbon-stop:hover { background: rgba(239,171,89,.22); }
 
-.side-demo-tag {
-  margin-left: auto;
-  font-family: var(--mono); font-size: 8px; font-weight: 700; letter-spacing: .16em;
-  color: #ffd28a; background: rgba(239,171,89,.12); border: 1px solid rgba(239,171,89,.45);
-  border-radius: 999px; padding: 2px 8px;
-}
-.side-device-dot.demo { background: #ffc25e; animation: pulse-yellow 2.2s infinite; }
-.side-state.demo { color: #ffd28a; }
 
 .conn-pill.demo { color: #ffd28a; border-color: rgba(239,171,89,.42); background: rgba(239,171,89,.09); }
 .conn-pill.demo .conn-dot { background: #ffc25e; animation: pulse-yellow 2.2s infinite; }
@@ -741,8 +732,6 @@ code { font-family: var(--mono); }
 }
 
 /* demo states used by the renderers */
-.security-banner.demo { border-color: rgba(239,171,89,.4); background: rgba(239,171,89,.06); }
-.security-banner.demo .sec-icon { background: rgba(239,171,89,.13); color: #ffc25e; border-color: rgba(239,171,89,.35); animation: none; }
-.security-banner.demo .sec-title { color: #ffd28a; }
-.pulse-dot.demo { background: #ffc25e; animation: pulse-yellow 2s infinite; }
 .conn-big.demo { color: #ffd28a; }
+
+.security-banner[hidden] { display: none; }

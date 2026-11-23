@@ -93,15 +93,12 @@
 
   function renderSidebar(device) {
     const conn = device.connection || 'offline';
-    const demo = !!device.demo;
-    $('sideDeviceDot').className = 'side-device-dot ' + (demo ? 'demo' : conn === 'online' ? 'live' : conn === 'stale' ? 'stale' : 'off');
+    $('sideDeviceDot').className = 'side-device-dot ' + (conn === 'online' ? 'live' : conn === 'stale' ? 'stale' : 'off');
     $('sideDeviceName').textContent = device.device_id || '—';
     $('sideWeight').textContent = device.weight_kg == null ? '–– kg' : `${device.weight_kg.toFixed(2)} kg`;
     const state = $('sideState');
-    state.textContent = demo ? 'DEMO' : conn.toUpperCase();
-    state.className = 'side-state ' + (demo ? 'demo' : conn === 'online' ? 'ok' : conn === 'stale' ? 'mid' : '');
-    const tag = $('sideDemoTag');
-    if (tag) tag.hidden = !demo;
+    state.textContent = conn.toUpperCase();
+    state.className = 'side-state ' + (conn === 'online' ? 'ok' : conn === 'stale' ? 'mid' : '');
   }
 
   /* ---------- header ---------- */
@@ -141,16 +138,12 @@
     const sub = $('secSub');
     banner.classList.remove('warn', 'alert', 'offline', 'demo');
 
+    // Demo mode must not claim a real security state — hide the banner.
     if (device.demo) {
-      banner.classList.add('demo');
-      title.textContent = 'DEMO MODE — SIMULATED TELEMETRY';
-      sub.textContent = 'Every reading on this screen is fabricated for UI review. Connect the ESP32 to stop demo — it stops automatically.';
-      setChip('secChipLock', 'LOCK —', '');
-      setChip('secChipBag', 'BAG —', '');
-      setChip('secChipMove', 'MOTION —', '');
-      setChip('secChipGps', 'GPS —', '');
+      banner.hidden = true;
       return;
     }
+    banner.hidden = false;
 
     if (device.connection === 'offline') {
       banner.classList.add('offline');
@@ -225,14 +218,10 @@
   function renderHero(device) {
     const chip = $('heroDeviceChip');
     const status = $('heroStatus');
-    const demo = !!device.demo;
-    chip.textContent = demo ? 'DEMO — SIMULATED' : 'DEVICE — ' + (device.device_id || 'unknown');
+    chip.textContent = 'DEVICE — ' + (device.device_id || 'unknown');
     chip.title = 'Source: ' + (device.usb_port || 'no device connected');
     status.classList.remove('live', 'stale', 'offline', 'demo');
-    if (demo) {
-      status.textContent = 'DEMO';
-      status.classList.add('demo');
-    } else if (device.connection === 'online') {
+    if (device.connection === 'online') {
       status.textContent = 'LIVE';
       status.classList.add('live');
     } else if (device.connection === 'stale') {
@@ -242,8 +231,7 @@
       status.textContent = 'OFFLINE';
       status.classList.add('offline');
     }
-    const state = demo ? 'simulated telemetry'
-      : device.connection === 'online' ? 'connected'
+    const state = device.connection === 'online' ? 'connected'
       : device.connection === 'stale' ? 'stale' : 'awaiting telemetry';
     $('heroCode').innerHTML = `let bag = device.current(); <em>&gt;</em> ${state}`;
   }
@@ -276,11 +264,8 @@
       chip.className = 'chip';
     } else {
       cap.textContent = `Calibrated · ${fmtAge(device.age_s)}`;
-      if (device.demo) { chip.textContent = 'DEMO'; chip.className = 'chip demo'; }
-      else {
-        chip.textContent = device.connection === 'online' ? 'LIVE' : device.connection === 'stale' ? 'STALE' : 'NO DATA';
-        chip.className = 'chip' + (device.connection === 'online' ? ' ok' : '');
-      }
+      chip.textContent = device.connection === 'online' ? 'LIVE' : device.connection === 'stale' ? 'STALE' : 'NO DATA';
+      chip.className = 'chip' + (device.connection === 'online' ? ' ok' : '');
     }
     $('weightStamp').textContent = v == null ? '—' : `${Math.min(100, (v / MAX_W) * 100).toFixed(0)}% OF MAX`;
 
@@ -339,16 +324,10 @@
       d.style.background = st === 'online' ? '#03c37b'
         : st === 'offline' ? '#3d3d49'
         : st === 'error' ? '#ff7d6b' : '#a86bd6';
-      d.style.boxShadow = st === 'online' ? '0 0 8px rgba(3,195,123,.55)' : 'none';
     });
 
-    if (device.demo) {
-      chip.textContent = `${online}/${MODULE_META.length} · DEMO`;
-      chip.className = 'chip demo';
-    } else {
-      chip.textContent = `${online}/${MODULE_META.length} ONLINE`;
-      chip.className = 'chip' + (online === MODULE_META.length ? ' ok' : online > 0 ? ' warn' : '');
-    }
+    chip.textContent = `${online}/${MODULE_META.length} ONLINE`;
+    chip.className = 'chip' + (online === MODULE_META.length ? ' ok' : online > 0 ? ' warn' : '');
   }
 
   /* ---------- telemetry grid ---------- */
@@ -399,7 +378,7 @@
 
     count.textContent = String(total).padStart(2, '0');
     const label = document.querySelector('.telemetry-label');
-    if (label) label.innerHTML = (last && last.device && last.device.demo) ? 'Simulated<br>Readings' : 'Live<br>Readings';
+    if (label) label.textContent = 'Readings';
 
     strip.innerHTML = MODULE_META.map(m => {
       const st = sensors[m.key] || 'not_tested';
@@ -411,11 +390,10 @@
   function renderGps(device) {
     const gps = device.gps;
     const valid = gps && gps.valid && gps.latitude != null;
-    const demo = !!device.demo;
     $('mapWrap').classList.toggle('valid', !!valid);
     const chip = $('gpsChip');
-    chip.textContent = demo ? (valid ? 'DEMO FIX' : 'DEMO') : (valid ? 'VALID FIX' : 'NO FIX');
-    chip.className = 'chip' + (demo ? ' demo' : (valid ? ' ok' : ''));
+    chip.textContent = valid ? 'VALID FIX' : 'NO FIX';
+    chip.className = 'chip' + (valid ? ' ok' : '');
     $('gpsCoords').textContent = valid ? fmtCoords(gps) : 'No valid fix';
     const link = $('gpsLink');
     if (valid) {
@@ -483,16 +461,6 @@
     const expl = $('aiExplanation');
     const meta = $('aiMeta');
 
-    const demo = last && last.device && last.device.demo;
-    if (demo) {
-      chip.textContent = 'DEMO'; chip.className = 'chip demo';
-      cls.textContent = '—'; cls.className = 'ai-classification';
-      risk.textContent = 'Demo mode — not analysed';
-      expl.textContent = 'The simulated bag has no real snapshot to analyze. Stop demo and connect a real ESP32 to see advisory AI analysis.';
-      meta.textContent = 'Advisory only — not a theft detector';
-      return;
-    }
-
     if (!aiHistory) {
       chip.textContent = 'UNAVAILABLE'; chip.className = 'chip';
       cls.textContent = '—'; cls.className = 'ai-classification';
@@ -546,10 +514,8 @@
   /* ---------- footer ---------- */
   function renderFooter(device) {
     const conn = device.connection || 'offline';
-    const demo = !!device.demo;
-    $('footerDot').className = 'pulse-dot ' + (demo ? 'demo' : conn === 'online' ? 'live' : conn === 'stale' ? 'stale' : 'offline');
-    if (demo) $('footerStatus').textContent = 'DEMO — simulated telemetry';
-    else if (conn === 'online') $('footerStatus').textContent = `Live — age ${fmtAge(device.age_s)}`;
+    $('footerDot').className = 'pulse-dot ' + (conn === 'online' ? 'live' : conn === 'stale' ? 'stale' : 'offline');
+    if (conn === 'online') $('footerStatus').textContent = `Live — age ${fmtAge(device.age_s)}`;
     else if (conn === 'stale') $('footerStatus').textContent = `Stale — last update ${fmtAge(device.age_s)}`;
     else $('footerStatus').textContent = 'Offline — no telemetry received';
     $('footerMeta').textContent = device.posted_at
@@ -564,11 +530,7 @@
     const stats = $('trendStats');
     if (stats && window.STB_CHART) window.STB_CHART.stats(stats, history);
     const chip = $('trendChip');
-    if (chip) {
-      const demo = last && last.device && last.device.demo;
-      chip.textContent = history.length >= 2 ? (demo ? 'DEMO TREND' : 'LIVE TREND') : '—';
-      chip.className = 'chip' + (demo && history.length >= 2 ? ' demo' : '');
-    }
+    if (chip) chip.textContent = history.length >= 2 ? 'LIVE TREND' : '—';
   }
 
   function renderModuleTable(device) {
@@ -718,7 +680,7 @@
       $('connModules').textContent = `${conn.modules_reported || 0} / ${conn.modules_total || 9}`;
       $('connParseErrors').textContent = String(conn.parse_errors || 0);
       $('connLastEvent').textContent = conn.last_event ? `${conn.last_event.type} — ${conn.last_event.message}` : '—';
-      $('connEndpointUrl').textContent = 'DEMO — simulated telemetry loop';
+      $('connEndpointUrl').textContent = 'Demo mode — simulated telemetry loop';
       return;
     }
     const connName = conn.connection || 'offline';
